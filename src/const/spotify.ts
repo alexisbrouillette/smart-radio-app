@@ -5,8 +5,6 @@ export const redirectUrl = 'http://localhost:3000';        // your redirect URL 
 
 export const authorizationEndpoint = "https://accounts.spotify.com/authorize";
 
-export const scope = 'user-read-playback-state user-read-currently-playing user-modify-playback-state';
-
-export const scopeArr = ['user-read-playback-state', 'user-read-currently-playing', 'user-modify-playback-state'];
+export const scope = 'user-read-playback-state user-read-currently-playing user-modify-playback-state streaming user-read-email user-read-private';
 
 export const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';

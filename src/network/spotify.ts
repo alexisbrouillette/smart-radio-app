@@ -3,17 +3,18 @@ import { currentToken } from "../spotifyTokenHandling";
 import { clientId, redirectUrl, tokenEndpoint } from "../const/spotify";
 import { Track } from "@spotify/web-api-ts-sdk";
 import {Buffer} from 'buffer';
+import { RadioItem } from "../App";
 
 
-const simplifyQueue = (raw_queue: Track[]) => {
+const simplifyQueue = (rawQueue: Track[]) => {
   const queue: any[] = [];
-
-  raw_queue.forEach((item, i) => {
+  rawQueue.forEach((item, i) => {
     queue.push({
       "name": item.name,
       "release_year": item.album.release_date.split("-")[0],
       "album": item.album.name,
-      "artists": item.artists.map(obj => obj.name).join(", ")
+      "artists": item.artists.map(obj => obj.name).join(", "),
+      "id": item.id
     });
   });
   return queue;
@@ -30,6 +31,7 @@ export async function getUserQueue() {
 
 export async function getToken(code:any) {
     let code_verifier = localStorage.getItem('code_verifier');
+    console.log("CALLING GET TOKEN");
     code_verifier = code_verifier ? code_verifier : '';
   
     const response = await fetch(tokenEndpoint, {
@@ -49,6 +51,29 @@ export async function getToken(code:any) {
     return await response.json();
 }
 
+export const getTokenFromrefreshToken = async () => {
+
+  // refresh token that has been previously stored
+  const refreshToken = localStorage.getItem('refresh_token');
+  const url = "https://accounts.spotify.com/api/token";
+
+   const payload = {
+     method: 'POST',
+     headers: {
+       'Content-Type': 'application/x-www-form-urlencoded'
+     },
+     body: new URLSearchParams({
+       grant_type: 'refresh_token',
+       refresh_token: refreshToken ?? '',
+       client_id: clientId
+     }),
+   }
+   const body = await fetch(url, payload);
+   const response = await body.json();
+
+   return response;
+ }
+
 const concatUint8Arrays = (a: Uint8Array, b: Uint8Array) => {
   const res = new Uint8Array(a.length + b.length);
   res.set(a);
@@ -66,27 +91,82 @@ const readWAV = async (stream: ReadableStreamDefaultReader<Uint8Array>) => {
   }
 
   const b64_wav = Buffer.from(wav).toString('base64');
-  const audio = new Audio(`data:audio/wav;base64,${b64_wav}`);
-  await audio.play();
+  return b64_wav;
+  //const audio = new Audio(`data:audio/wav;base64,${b64_wav}`);
+  //await audio.play();
 }
 
-export async function sendRequest(queue: Track[]) {
-  console.log(simplifyQueue(queue));
+export async function generate_queue_texts(queue: Track[]) {
   try {
-    const response = await fetch('http://127.0.0.1:8000/get_queue_radio/', {
+    const response = await fetch('http://127.0.0.1:8000/get_radio_text/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(simplifyQueue(queue))
     });
-    const body = response.body?.getReader();
-    console.log(body);
+    //const body = response.body?.getReader();
+    const body = await response.json();
     if (body !== undefined) {
-      await readWAV(body);
+      return body;
+      //await readWAV(body);
     }
     
   } catch (error) {
     console.error('Error:', error);
   }
 }
+export async function generate_queue_audio(text: string): Promise<string | null> {
+  //console.log("GENERATING AUDIO")
+  try {
+    const response = await fetch('http://127.0.0.1:8000/get_radio_audio/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(text)
+    });
+    const body = response.body?.getReader();
+    //const body = await response.json();
+    if (body !== undefined) {
+       return await readWAV(body);
+    }
+    return null;
+    
+  } catch (error) {
+    console.error('Error:', error);
+    return null;
+  }
+}
+
+export async function getCurrentlyPlaying() {
+  const response = await fetch("https://api.spotify.com/v1/me/player/currently-playing", {
+    method: 'GET',
+    headers: { 'Authorization': 'Bearer ' + currentToken.access_token },
+  });
+
+  return await response.json();
+}
+
+export async function playOnSDK() {
+  const response = await fetch("https://api.spotify.com/v1/me/player/devices ", {
+    method: 'GET',
+    headers: { 'Authorization': 'Bearer ' + currentToken.access_token },
+  })
+
+  const body =  await response.json();
+  const devices = body.devices;
+
+  if (devices.length > 0) {
+    const sdkDevice = devices.find((device: any) => device.name === "Web Playback SDK");
+
+    if (sdkDevice) {
+      const response = await fetch(`https://api.spotify.com/v1/me/player`, {
+        method: 'PUT',
+        headers: { 'Authorization': 'Bearer ' + currentToken.access_token },
+        body: JSON.stringify({ device_ids: [sdkDevice.id] })
+      });
+    }
+  }
+}
+

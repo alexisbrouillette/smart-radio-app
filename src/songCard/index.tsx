@@ -1,13 +1,13 @@
 import { Card, CardBody, Heading, Stack, Text, Image } from "@chakra-ui/react";
 import { Track } from "@spotify/web-api-ts-sdk";
+import { memo } from "react";
 
 
 interface SongCardProps {
     song: Track
 }
-export const SongCard = (props : SongCardProps) => {
+export const SongCard = memo((props : SongCardProps) => {
     const {song} = props;
-
     const SongCard = () => {
         return (
             <Card direction={{ base: 'row', sm: 'row' }} size={'sm'}
@@ -40,4 +40,4 @@ export const SongCard = (props : SongCardProps) => {
             <SongCard />
         </div>
     )
-}
+})
