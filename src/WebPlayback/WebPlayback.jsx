@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import SkipNextIcon from '@mui/icons-material/SkipNext';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
+import "./style.css";
 
 const track = {
     name: "",
@@ -54,7 +55,6 @@ function WebPlayback(props) {
             document.body.appendChild(script);
 
             window.onSpotifyWebPlaybackSDKReady = () => {
-                console.log(props.token);
                 try{
                     player.current = new window.Spotify.Player({
                         name: 'Web Playback SDK',

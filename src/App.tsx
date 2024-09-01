@@ -6,7 +6,7 @@ import { getToken, getUserQueue, playOnSDK, generate_queue_texts, generate_queue
 import { SongCard } from './songCard';
 
 import { SpotifyApi, Track } from "@spotify/web-api-ts-sdk";
-import WebPlayback from './WebPlayback';
+import WebPlayback from './WebPlayback/WebPlayback';
 import { RadioItemCard } from './radioItemCard';
 
 
@@ -91,8 +91,6 @@ function App() {
       getRadioTexts(fetchingRadioFor);
     }
   }, [fetchingRadioFor]);
-
-  //NEED TO FIX THIS ONE!!!!!!!!!!!!!!!!!!!
 
   useEffect(() => {
     const getAudio = async (radioText: {text: string, beforeTrackId: string}) => {
@@ -254,8 +252,7 @@ function App() {
       }
       return (
         <div >
-          {/* <Button colorScheme='blue' onClick={() =>getQueue()}>You are connected</Button> */}
-          <Button colorScheme='blue' onClick={() => startRadio()}>Start!</Button>
+          {queue.length == 0  ? <Button colorScheme='blue' onClick={() => startRadio()}>Start!</Button> : null}
           <WebPlayback 
             token={currentToken.access_token} 
             onPlayerChange={onPlayerChange}
