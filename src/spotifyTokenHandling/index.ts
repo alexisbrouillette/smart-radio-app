@@ -1,5 +1,5 @@
 import React from "react";
-import { authorizationEndpoint, clientId, possible, redirectUrl, scope } from "../const/spotify";
+import { authorizationEndpoint, clientId, possible, scope } from "../const/spotify";
 
 
 
@@ -24,20 +24,19 @@ export async function redirectToSpotifyAuthorize() {
     window.localStorage.setItem('code_verifier', code_verifier);
   
     const authUrl = new URL(authorizationEndpoint)
+    console.log(authUrl);
     const params = {
       response_type: 'code',
       client_id: clientId,
       scope: scope,
       code_challenge_method: 'S256',
       code_challenge: code_challenge_base64,
-      redirect_uri: redirectUrl,
+      redirect_uri: process.env.REACT_APP_FRONTEND_URL ?? '',
     };
   
     authUrl.search = new URLSearchParams(params).toString();
     window.location.href = authUrl.toString(); // Redirect the user to the authorization server for login
 }
-
-
 
 
 // Data structure that manages the current active token, caching it in localStorage
@@ -49,7 +48,6 @@ export  const currentToken = {
   
     save: function (response:any) {
       const { access_token, refresh_token, expires_in } = response;
-      console.log("Saving token: " + access_token + " " + refresh_token + " " + expires_in);
       localStorage.setItem('access_token', access_token);
       localStorage.setItem('refresh_token', refresh_token);
       localStorage.setItem('expires_in', expires_in);

@@ -24,6 +24,7 @@ function App() {
   const [fetchedNewRadioItems, setFetchedNewRadioItems] = useState<boolean>(false);
   const trackChanged = useRef(false);
   const [fetchingRadioFor, setFetchingRadioFor] = useState<Track[]>([]);
+  const [gotToken, setGotToken] = useState<boolean>(false);
 
   //this is not sexy but i need to acces it in the useEffect fo fetch the audio and the state is not up to date so i used ref too.. but i need
   // the rerenders of the state sooo.. yeah
@@ -53,6 +54,7 @@ function App() {
       if (code) {
         const token = await getToken(code);
         currentToken.save(token);
+        setGotToken(true);
         const url = new URL(window.location.href);
         url.searchParams.delete("code");
 
@@ -63,6 +65,7 @@ function App() {
       else {
         const res = await getTokenFromrefreshToken();
         currentToken.save(res);
+        setGotToken(true);
       }
 
     }
@@ -243,7 +246,7 @@ function App() {
   }
   const render = () => {
     try{
-      if (currentToken.access_token == null || currentToken.access_token == "") {
+      if (currentToken.access_token == null || currentToken.access_token == "" || currentToken.access_token == 'undefined') {
         return (
           <div>
             <Button colorScheme='blue' onClick={()=> connectToSpotify()}>Connect to spotify!</Button>
