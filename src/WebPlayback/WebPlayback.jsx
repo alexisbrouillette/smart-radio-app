@@ -61,7 +61,7 @@ function WebPlayback(props) {
                         getOAuthToken: cb => {
                                 cb(props.token);
                         },
-                        //volume: 0.5
+                        volume: 1
                     });
     
                     //setPlayer(player);
