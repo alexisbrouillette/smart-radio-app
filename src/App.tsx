@@ -34,6 +34,7 @@ function App() {
 
   const radioTextToAudioQueueRef = useRef<{text: string, beforeTrackId: string}[]>([]);
   const [generatingAudio, setGeneratingAudio] = useState<boolean>(false);
+  const [debugText, setDebugText] = useState<string>("");
 
   const playSound = async (b64Audio: string) => {
     //const audioTune = new Audio('./valid1.wav');
@@ -77,7 +78,6 @@ function App() {
   useEffect(() => {
     const getRadioTexts = async (tracks: Track[]) => {
       const radioText = await generate_queue_texts(tracks);
-      console.log(radioText);
       //const radioText = {text: tracks.map(t => t.name).join(", "), beforeTrackId: tracks[tracks.length-1].id, audio: null};
       //await sleep(2000);
       const newRadioItems = [...radioItemsRef.current];
@@ -90,7 +90,6 @@ function App() {
       setFetchedNewRadioItems(true);
     }
     if (fetchingRadioFor.length > 0) {
-      console.log("fetching new radio items");
       getRadioTexts(fetchingRadioFor);
     }
   }, [fetchingRadioFor]);
@@ -107,7 +106,6 @@ function App() {
       setRadioTextToAudioQueue(newTextToAudioQueue);
       radioTextToAudioQueueRef.current = newTextToAudioQueue;
       setGeneratingAudio(false);
-      console.log("finished generating audio");
     }
     if(radioTextToAudioQueue.length > 0 && !generatingAudio) {
       setGeneratingAudio(true);
@@ -193,17 +191,24 @@ function App() {
     }
     return null;
   }
+  const pauseSong = async (player:any) => {
+    let state = await player.current.getCurrentState();
+    while(state.paused == false){
+      player.current.pause();
+      state = await player.current.getCurrentState();
+    }
+    return null;
+  }
 
   //a dumb way to do it. but could not pause because of the loading state of the track -.-
   const onPlayerChange = async (track: Track, player: any) => {
-    console.log(radioItems);
     if(radioItems.length > 0 && track.id == radioItems[0].beforeTrackId){
       console.log("PLAYING RADIO");
-      player.current.setVolume(0);
+      pauseSong(player);
+      
       if(radioItems[0].audio != null && radioItems[0].audio != 'empty'){
         await playSound(radioItems[0].audio);
-        player.current.setVolume(1);
-        player.current.seek(0);
+        player.current.resume();
       }
       //removing the radio item that was played from the queue
       radioItems.shift();
@@ -230,19 +235,20 @@ function App() {
   }
 
   const sdkPlayerStarted = async (player: any) => {
-    console.log("SDK player started");
+    console.log("SDK player started 111111111!!!!");
+    player.current.activateElement();
     player.current.resume();
+    setDebugText(player.current.state);
     const newQueue = await getQueue();
     setQueue(newQueue as Track[]);
 
     if (newQueue === undefined) return;
     setFetchingRadioFor([newQueue[0], newQueue[1]]);//for the first two tracks
   }
+  
 
   const startRadio = async () => {
     await playOnSDK();
-
-    
   }
   const render = () => {
     try{
@@ -255,7 +261,7 @@ function App() {
       }
       return (
         <div >
-          {queue.length == 0  ? <Button colorScheme='blue' onClick={() => startRadio()}>Start!</Button> : null}
+          {/* {queue.length == 0  ? <Button colorScheme='blue' onClick={() => startRadio()}>Start!</Button> : null} */}
           <WebPlayback 
             token={currentToken.access_token} 
             onPlayerChange={onPlayerChange}
@@ -281,6 +287,7 @@ function App() {
       <header className="App-header">
         Smart radio
       </header>
+      <h1 style={{ color: 'red' }}>{debugText}</h1>
       <div className='Content'>
         {render()}
       </div>

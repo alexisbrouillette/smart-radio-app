@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import SkipNextIcon from '@mui/icons-material/SkipNext';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
+import { Button } from '@chakra-ui/react';
+import {playOnSDK} from '../network/spotify';
 import "./style.css";
 
 const track = {
@@ -55,6 +57,7 @@ function WebPlayback(props) {
             document.body.appendChild(script);
 
             window.onSpotifyWebPlaybackSDKReady = () => {
+                console.log("onSpotifyWebPlaybackSDKReady");
                 try{
                     player.current = new window.Spotify.Player({
                         name: 'Web Playback SDK',
@@ -74,6 +77,9 @@ function WebPlayback(props) {
                     player.current.addListener('not_ready', ({ device_id }) => {
                         console.log('Device ID has gone offline', device_id);
                     });
+                    player.current.addListener('autoplay_failed', () => {
+                        alert('Autoplay is not allowed by the browser autoplay rules');
+                      });
                     player.current.on('authentication_error', ({ message }) => {
                         console.error('Failed to authenticate', message);
                       });
@@ -133,12 +139,38 @@ function WebPlayback(props) {
         player.current.togglePlay();
         setPaused(!is_paused);
     }
+    const pause = () => {
+        console.log("pause");
+        player.current.pause();
+        setPaused(true);
+    }
+    const play = () => {
+        console.log("play");
+        player.current.resume();
+        setPaused(false);
+    }
+
+    const startRadio = async () => {
+        await playOnSDK();
+        if (player.current) {
+            player.current.activateElement();
+            player.current.resume();
+            setPaused(false);
+        }
+    }
     if (!is_active) { 
         return (
             <>
                 <div className="container">
                     <div className="main-wrapper">
-                        <b> Instance not active. Transfer your playback using your Spotify app </b>
+                        
+                        <b style={{whiteSpace: "pre-line", color: "white"}}> { `Hi! Thanks for trying my app:) \n 
+                                Please before clicking this sweet button, make sure you have started a playlist in your Spotify app.\n
+                                This is really early stage so things might break. \n
+                                If you think of any upgrades or want to report bugs, please do!\n
+                                Enjoy it:)\n
+                        `} </b>
+                        <Button colorScheme='blue' onClick={() => startRadio()}>Start!</Button>
                     </div>
                 </div>
             </>)
@@ -158,13 +190,16 @@ function WebPlayback(props) {
                                 &lt;&lt;
                             </button> */}
                             <div className='btn-spotify-container'>
-                                <button className="btn-spotify" onClick={() => {toggleTrackPlay()} } >
-                                    {
-                                        is_paused
-                                            ? <PlayArrowIcon fontSize="large" margin={10}/>
-                                            : <PauseIcon fontSize="large"  margin={10}/>
-                                    }
-                                </button>
+                                {is_paused ? 
+                                 <button className="btn-spotify" onClick={() => play() } >
+                                    <PlayArrowIcon fontSize="large"  margin={10}/> 
+                                 </button>
+                                
+                                : 
+                                <button className="btn-spotify" onClick={() => pause() } >
+                                    <PauseIcon fontSize="large"  margin={10}/> 
+                                 </button>
+    }
                                 <button className="btn-spotify" onClick={() => { player.current.nextTrack() }} >
                                     <SkipNextIcon fontSize="large"/>
                                 </button>
