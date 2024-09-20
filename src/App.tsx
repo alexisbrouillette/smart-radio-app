@@ -222,18 +222,6 @@ function App() {
     setQueue(newQueue);
   }
 
-  const generate_radio = async (queue: Track[]) => {
-    //generate radio for the next 2 tracks at a time
-    await sleep(5000);
-    const queueElements = queue.slice(0, 2);
-    const radioText = await generate_queue_texts(queueElements);
-    //const radioAudio = await generate_queue_audios(queueElements);
-    console.log(radioItems);
-    const newRadioItems = [...radioItems];
-    newRadioItems.push(radioText);
-    return newRadioItems;
-  }
-
   const sdkPlayerStarted = async (player: any) => {
     console.log("SDK player started 111111111!!!!");
     player.current.activateElement();
@@ -245,11 +233,7 @@ function App() {
     if (newQueue === undefined) return;
     setFetchingRadioFor([newQueue[0], newQueue[1]]);//for the first two tracks
   }
-  
 
-  const startRadio = async () => {
-    await playOnSDK();
-  }
   const render = () => {
     try{
       if (currentToken.access_token == null || currentToken.access_token == "" || currentToken.access_token == 'undefined') {

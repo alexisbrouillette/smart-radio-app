@@ -151,25 +151,31 @@ export async function getCurrentlyPlaying() {
   return await response.json();
 }
 
-export async function playOnSDK() {
+export async function playOnSDK(deviceId: string) {
   console.log("PLAYING ON SDK");
-  const response = await fetch("https://api.spotify.com/v1/me/player/devices ", {
-    method: 'GET',
+  // const response = await fetch("https://api.spotify.com/v1/me/player/devices ", {
+  //   method: 'GET',
+  //   headers: { 'Authorization': 'Bearer ' + currentToken.access_token },
+  // })
+
+  // const body =  await response.json();
+  // const devices = body.devices;
+
+  // if (devices.length > 0) {
+  //   const sdkDevice = devices.find((device: any) => device.name === "Web Playback SDK");
+  //   console.log(sdkDevice);
+  //   if (sdkDevice) {
+  //     const response = await fetch(`https://api.spotify.com/v1/me/player`, {
+  //       method: 'PUT',
+  //       headers: { 'Authorization': 'Bearer ' + currentToken.access_token },
+  //       body: JSON.stringify({ device_ids: [sdkDevice.id] })
+  //     });
+  //   }
+  // }
+
+  await fetch(`https://api.spotify.com/v1/me/player`, {
+    method: 'PUT',
     headers: { 'Authorization': 'Bearer ' + currentToken.access_token },
-  })
-
-  const body =  await response.json();
-  const devices = body.devices;
-
-  if (devices.length > 0) {
-    const sdkDevice = devices.find((device: any) => device.name === "Web Playback SDK");
-    console.log(sdkDevice);
-    if (sdkDevice) {
-      const response = await fetch(`https://api.spotify.com/v1/me/player`, {
-        method: 'PUT',
-        headers: { 'Authorization': 'Bearer ' + currentToken.access_token },
-        body: JSON.stringify({ device_ids: [sdkDevice.id] })
-      });
-    }
-  }
+    body: JSON.stringify({ device_ids: [deviceId] })
+  });
 }

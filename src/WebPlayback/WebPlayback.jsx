@@ -22,6 +22,7 @@ function WebPlayback(props) {
 
     const [is_paused, setPaused] = useState(false);
     const [is_active, setActive] = useState(false);
+    const [deviceId, setDeviceId] = useState("");
     const playerStarted = useRef(false);
     const player = useRef(null);
     const [current_track, setCurrentTrack] = useState(track);
@@ -72,6 +73,7 @@ function WebPlayback(props) {
     
                     player.current.addListener('ready', ({ device_id }) => {
                         console.log('Ready with Device ID', device_id);
+                        setDeviceId(device_id);
                     });
     
                     player.current.addListener('not_ready', ({ device_id }) => {
@@ -151,7 +153,7 @@ function WebPlayback(props) {
     }
 
     const startRadio = async () => {
-        await playOnSDK();
+        await playOnSDK(deviceId);
         if (player.current) {
             player.current.activateElement();
             player.current.resume();
@@ -170,7 +172,13 @@ function WebPlayback(props) {
                                 If you think of any upgrades or want to report bugs, please do!\n
                                 Enjoy it:)\n
                         `} </b>
-                        <Button colorScheme='blue' onClick={() => startRadio()}>Start!</Button>
+                        <Button
+                            colorScheme='blue'
+                            onClick={() => startRadio()}
+                            isLoading={deviceId == ""}
+                            loadingText='Gimme a sec'>
+                            Start!
+                        </Button>
                     </div>
                 </div>
             </>)
