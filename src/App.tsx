@@ -77,6 +77,7 @@ function App() {
 
   useEffect(() => {
     const getRadioTexts = async (tracks: Track[]) => {
+      console.log(tracks);
       const radioText = await generate_queue_texts(tracks);
       //const radioText = {text: tracks.map(t => t.name).join(", "), beforeTrackId: tracks[tracks.length-1].id, audio: null};
       //await sleep(2000);
@@ -167,8 +168,16 @@ function App() {
   const getQueue = async () => {
     const res = await getUserQueue();
     //checking if it returned a track or an episode(episode don't have an album)
+    console.log(res)
     if (res === undefined || !('album' in res.queue[0])) return;
-    return res.queue;
+
+    // removes duplicates
+    const uniqueTracks = res.queue.filter((track: Track, index: number, self: Track[]) =>
+      index === self.findIndex((t) => t.id === track.id)
+    );
+    console.log(uniqueTracks.map((track: Track) => track.name))
+    setQueue(uniqueTracks);
+    return uniqueTracks;
   }
 
 
@@ -182,6 +191,7 @@ function App() {
         renderList.splice(index, 0, radioItem);
 
       }
+      console.log(renderList);
       return renderList.map((elem) => {
         if ('album' in elem)
           return <SongCard song={elem} key={elem.id} />;

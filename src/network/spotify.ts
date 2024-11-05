@@ -20,12 +20,31 @@ const simplifyQueue = (rawQueue: Track[]) => {
   return queue;
 }
 export async function getUserQueue() {
-    const response = await fetch("https://api.spotify.com/v1/me/player/queue", {
-      method: 'GET',
-      headers: { 'Authorization': 'Bearer ' + currentToken.access_token },
-    });
-  
-    return await response.json();
+    const maxRetries = 5;
+    let attempts = 0;
+
+    while (attempts < maxRetries) {
+      try {
+      const response = await fetch("https://api.spotify.com/v1/me/player/queue", {
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer ' + currentToken.access_token },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error fetching user queue: ${response.statusText}`);
+      }
+
+      return await response.json();
+      } catch (error) {
+      console.error(`Attempt ${attempts + 1} - Error:`, error);
+      attempts++;
+      if (attempts < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } else {
+        return null;
+      }
+      }
+    }
 }
 
 
