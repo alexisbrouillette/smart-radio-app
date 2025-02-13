@@ -27,7 +27,8 @@ function WebPlayback(props) {
     const player = useRef(null);
     const [current_track, setCurrentTrack] = useState(track);
     const current_track_name = useRef("");
-
+    const audioContext = useRef(null);
+    const lowVolumeSound = useRef(null);
 
     const cleanup = () => {
         alert("cleanup");
@@ -130,13 +131,29 @@ function WebPlayback(props) {
         }));
     }
 
+    const initializeAudioContext = () => {
+        if (!audioContext.current) {
+            audioContext.current = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.current.createOscillator();
+            const gainNode = audioContext.current.createGain();
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(440, audioContext.current.currentTime);
+            gainNode.gain.setValueAtTime(0.001, audioContext.current.currentTime);
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.current.destination);
+            oscillator.start();
+            lowVolumeSound.current = oscillator;
+        }
+    }
 
     useEffect(() => {
         if (player.current) {
             player.current.removeListener("player_state_changed");
             addPlayerStateChangedListener();
         }
+        initializeAudioContext();
     }, [player.current, props.queue, props.radioItems]);//needs to reattach the listener so the state is updated inside the callack for the listener
+
     const toggleTrackPlay = () => {
         player.current.togglePlay();
         setPaused(!is_paused);
