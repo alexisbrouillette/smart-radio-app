@@ -20,12 +20,14 @@ const simplifyQueue = (rawQueue: Track[]) => {
   return queue;
 }
 export async function getUserQueue() {
-    const maxRetries = 5;
-    let attempts = 0;
+  const maxRetries = 5;
+  let attempts = 0;
 
-    while (attempts < maxRetries) {
-      try {
-      const response = await fetch("https://api.spotify.com/v1/me/player/queue", {
+  while (attempts < maxRetries) {
+    try {
+      const url = "https://api.spotify.com/v1/me/player/queue";
+      console.log(`Fetching user queue from URL: ${url}`);
+      const response = await fetch(url, {
         method: 'GET',
         headers: { 'Authorization': 'Bearer ' + currentToken.access_token },
       });
@@ -34,8 +36,14 @@ export async function getUserQueue() {
         throw new Error(`Error fetching user queue: ${response.statusText}`);
       }
 
-      return await response.json();
-      } catch (error) {
+      const data = await response.json();
+
+      if (data.queue.length === 0) {
+        throw new Error('Queue is empty');
+      }
+
+      return data;
+    } catch (error) {
       console.error(`Attempt ${attempts + 1} - Error:`, error);
       attempts++;
       if (attempts < maxRetries) {
@@ -43,8 +51,8 @@ export async function getUserQueue() {
       } else {
         return null;
       }
-      }
     }
+  }
 }
 
 

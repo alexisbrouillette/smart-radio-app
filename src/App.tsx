@@ -77,7 +77,6 @@ function App() {
 
   useEffect(() => {
     const getRadioTexts = async (tracks: Track[]) => {
-      console.log(tracks);
       const radioText = await generate_queue_texts(tracks);
       //const radioText = {text: tracks.map(t => t.name).join(", "), beforeTrackId: tracks[tracks.length-1].id, audio: null};
       //await sleep(2000);
@@ -88,7 +87,7 @@ function App() {
       radioTextToAudioQueueRef.current = newTextToAudioQueue;
       radioItemsRef.current = newRadioItems;
       setRadioItems(newRadioItems);
-      setFetchedNewRadioItems(true);
+      //setFetchedNewRadioItems(true); //need to only update this when the song is changed
     }
     if (fetchingRadioFor.length > 0) {
       getRadioTexts(fetchingRadioFor);
@@ -118,6 +117,7 @@ function App() {
 
   useEffect(() => {
     //previousRadioItems.current = radioItems;
+    
     if(fetchedNewRadioItems) {
       setFetchedNewRadioItems(false);
       //check if there is a radio item to fetch (don't fetch if it is associated with the last track)
@@ -141,7 +141,6 @@ function App() {
 
   useEffect(() => {
     if (trackChanged.current) {
-      console.log("trackChanged");
       trackChanged.current = false;
     }
   }, [trackChanged.current]);
@@ -168,14 +167,12 @@ function App() {
   const getQueue = async () => {
     const res = await getUserQueue();
     //checking if it returned a track or an episode(episode don't have an album)
-    console.log(res)
     if (res === undefined || !('album' in res.queue[0])) return;
 
     // removes duplicates
     const uniqueTracks = res.queue.filter((track: Track, index: number, self: Track[]) =>
       index === self.findIndex((t) => t.id === track.id)
     );
-    console.log(uniqueTracks.map((track: Track) => track.name))
     setQueue(uniqueTracks);
     return uniqueTracks;
   }
@@ -189,9 +186,7 @@ function App() {
         const radioItem = radioItems[i];
         const index = renderList.findIndex((item) => 'name' in item && item.id === radioItem.beforeTrackId);
         renderList.splice(index, 0, radioItem);
-
       }
-      console.log(renderList);
       return renderList.map((elem) => {
         if ('album' in elem)
           return <SongCard song={elem} key={elem.id} />;
@@ -211,9 +206,11 @@ function App() {
   }
 
   //a dumb way to do it. but could not pause because of the loading state of the track -.-
+  //this fn is called ONLY when the track is changed
   const onPlayerChange = async (track: Track, player: any) => {
+    //since its only called when the track is changed, we can fetch new radio items here
+
     if(radioItems.length > 0 && track.id == radioItems[0].beforeTrackId){
-      console.log("PLAYING RADIO");
       pauseSong(player);
       
       if(radioItems[0].audio != null && radioItems[0].audio != 'empty'){
@@ -224,16 +221,20 @@ function App() {
       radioItems.shift();
       setRadioItems(radioItems);
       radioItemsRef.current = radioItems;
+
+      
     }
 
     //removing the track that was played from the queue
     const newQueue = [...queue];
     newQueue.shift();
     setQueue(newQueue);
+
+    //ready to fetch radio for the next track
+    setFetchedNewRadioItems(true);
   }
 
   const sdkPlayerStarted = async (player: any) => {
-    console.log("SDK player started 111111111!!!!");
     player.current.activateElement();
     player.current.resume();
     setDebugText(player.current.state);
