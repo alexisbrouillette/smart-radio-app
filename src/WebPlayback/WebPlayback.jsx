@@ -51,6 +51,49 @@ function WebPlayback(props) {
 
     useEffect(() => {
         console.log("webPlayerMounted");
+        const initializePlayer = () => {
+            try {
+                player.current = new window.Spotify.Player({
+                    name: 'Web Playback SDK',
+                    getOAuthToken: cb => {
+                        cb(props.token);
+                    },
+                    volume: 1
+                });
+
+                player.current.addListener('ready', ({ device_id }) => {
+                    console.log('Ready with Device ID', device_id);
+                    setDeviceId(device_id);
+                });
+
+                player.current.addListener('not_ready', ({ device_id }) => {
+                    console.log('Device ID has gone offline', device_id);
+                });
+
+                player.current.addListener('autoplay_failed', () => {
+                    alert('Autoplay is not allowed by the browser autoplay rules');
+                });
+
+                player.current.on('initialization_error', ({ message }) => {
+                    console.error('Failed to initialize', message);
+                    initializePlayer();
+                });
+
+                player.current.on('authentication_error', ({ message }) => {
+                    console.error('Failed to authenticate', message);
+                    initializePlayer();
+                });
+
+                addPlayerStateChangedListener();
+
+                player.current.connect().catch(e => console.error('I suck'));
+                window.addEventListener('beforeunload', () => cleanup());
+            } catch (e) {
+                console.log("im sad");
+                console.log(e);
+            }
+        };
+
         if (webPlayerLoaded() == false) {
             const script = document.createElement("script");
             script.src = "https://sdk.scdn.co/spotify-player.js";
@@ -60,49 +103,15 @@ function WebPlayback(props) {
 
             window.onSpotifyWebPlaybackSDKReady = () => {
                 console.log("onSpotifyWebPlaybackSDKReady");
-                try{
-                    player.current = new window.Spotify.Player({
-                        name: 'Web Playback SDK',
-                        getOAuthToken: cb => {
-                                cb(props.token);
-                        },
-                        volume: 1
-                    });
-    
-                    //setPlayer(player);
-                    //player.current = player;
-    
-                    player.current.addListener('ready', ({ device_id }) => {
-                        console.log('Ready with Device ID', device_id);
-                        setDeviceId(device_id);
-                    });
-    
-                    player.current.addListener('not_ready', ({ device_id }) => {
-                        console.log('Device ID has gone offline', device_id);
-                    });
-                    player.current.addListener('autoplay_failed', () => {
-                        alert('Autoplay is not allowed by the browser autoplay rules');
-                      });
-                    player.current.on('authentication_error', ({ message }) => {
-                        console.error('Failed to authenticate', message);
-                      });
-                    addPlayerStateChangedListener();
-    
-                    player.current.connect().catch(e => console.error('I suck'));
-                    window.addEventListener('beforeunload', () => cleanup());
-                }
-                catch(e){
-                    console.log("im sad");
-                    console.log(e);
-                }
-
-                return () => {
-                    cleanup();
-                }
-
+                initializePlayer();
             };
+        } else {
+            initializePlayer();
         }
 
+        return () => {
+            cleanup();
+        };
     }, []);
 
     const addPlayerStateChangedListener = () => {
