@@ -58,7 +58,8 @@ function WebPlayback(props) {
                     getOAuthToken: cb => {
                         cb(props.token);
                     },
-                    volume: 1
+                    volume: 1,
+                    debug: true
                 });
 
                 player.current.addListener('ready', ({ device_id }) => {
@@ -136,11 +137,16 @@ function WebPlayback(props) {
                 //(!state) ? setActive(false) : setActive(true);
 
             });
+            // Resume playback if paused
+            if (state.paused) {
+                player.current.resume();
+            }
 
         }));
     }
 
     const initializeAudioContext = () => {
+        console.log("initializeAudioContext: ", audioContext.current);
         if (!audioContext.current) {
             audioContext.current = new (window.AudioContext || window.webkitAudioContext)();
             const oscillator = audioContext.current.createOscillator();
@@ -160,7 +166,6 @@ function WebPlayback(props) {
             player.current.removeListener("player_state_changed");
             addPlayerStateChangedListener();
         }
-        initializeAudioContext();
     }, [player.current, props.queue, props.radioItems]);//needs to reattach the listener so the state is updated inside the callack for the listener
 
     const toggleTrackPlay = () => {
@@ -179,6 +184,7 @@ function WebPlayback(props) {
     }
 
     const startRadio = async () => {
+        initializeAudioContext();
         await playOnSDK(deviceId);
         if (player.current) {
             player.current.activateElement();
