@@ -153,7 +153,7 @@ function WebPlayback(props) {
             const gainNode = audioContext.current.createGain();
             oscillator.type = 'sine';
             oscillator.frequency.setValueAtTime(440, audioContext.current.currentTime);
-            gainNode.gain.setValueAtTime(0.001, audioContext.current.currentTime);
+            gainNode.gain.setValueAtTime(0.1, audioContext.current.currentTime);
             oscillator.connect(gainNode);
             gainNode.connect(audioContext.current.destination);
             oscillator.start();
