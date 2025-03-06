@@ -51,6 +51,7 @@ function WebPlayback(props) {
 
     useEffect(() => {
         console.log("webPlayerMounted");
+        window.ReactNativeWebView.postMessage("webPlayerMounted");
         const initializePlayer = () => {
             try {
                 player.current = new window.Spotify.Player({
@@ -64,11 +65,13 @@ function WebPlayback(props) {
 
                 player.current.addListener('ready', ({ device_id }) => {
                     console.log('Ready with Device ID', device_id);
+                    window.ReactNativeWebView.postMessage("Ready with Device ID: " + device_id);
                     setDeviceId(device_id);
                 });
 
                 player.current.addListener('not_ready', ({ device_id }) => {
                     console.log('Device ID has gone offline', device_id);
+                    window.ReactNativeWebView.postMessage("Device ID has gone offline: " + device_id);
                 });
 
                 player.current.addListener('autoplay_failed', () => {
@@ -91,7 +94,9 @@ function WebPlayback(props) {
                 window.addEventListener('beforeunload', () => cleanup());
             } catch (e) {
                 console.log("im sad");
+                window.ReactNativeWebView.postMessage("im sad");
                 console.log(e);
+                window.ReactNativeWebView.postMessage(e);
             }
         };
 
@@ -104,6 +109,7 @@ function WebPlayback(props) {
 
             window.onSpotifyWebPlaybackSDKReady = () => {
                 console.log("onSpotifyWebPlaybackSDKReady");
+                window.ReactNativeWebView.postMessage("onSpotifyWebPlaybackSDKReady");
                 initializePlayer();
             };
         } else {
@@ -137,16 +143,13 @@ function WebPlayback(props) {
                 //(!state) ? setActive(false) : setActive(true);
 
             });
-            // Resume playback if paused
-            if (state.paused) {
-                player.current.resume();
-            }
 
         }));
     }
 
     const initializeAudioContext = () => {
         console.log("initializeAudioContext: ", audioContext.current);
+        window.ReactNativeWebView.postMessage("initializeAudioContext: " + audioContext.current);
         if (!audioContext.current) {
             audioContext.current = new (window.AudioContext || window.webkitAudioContext)();
             const oscillator = audioContext.current.createOscillator();
@@ -174,11 +177,13 @@ function WebPlayback(props) {
     }
     const pause = () => {
         console.log("pause");
+        window.ReactNativeWebView.postMessage("pause");
         player.current.pause();
         setPaused(true);
     }
     const play = () => {
         console.log("play");
+        window.ReactNativeWebView.postMessage("play");
         player.current.resume();
         setPaused(false);
     }
