@@ -55,6 +55,7 @@ function WebPlayback(props) {
         const initializePlayer = () => {
             window.ReactNativeWebView.postMessage("initializePlayer");
             try {
+                window.ReactNativeWebView.postMessage(window.Spotify);
                 player.current = new window.Spotify.Player({
                     name: 'Web Playback SDK',
                     getOAuthToken: cb => {
@@ -63,7 +64,7 @@ function WebPlayback(props) {
                     volume: 1,
                     debug: true
                 });
-
+                window.ReactNativeWebView.postMessage("player created");
                 player.current.addListener('ready', ({ device_id }) => {
                     console.log('Ready with Device ID', device_id);
                     window.ReactNativeWebView.postMessage("Ready with Device ID: " + device_id);
