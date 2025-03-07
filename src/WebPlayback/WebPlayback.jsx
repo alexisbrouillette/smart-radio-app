@@ -53,6 +53,7 @@ function WebPlayback(props) {
         console.log("webPlayerMounted");
         window.ReactNativeWebView.postMessage("webPlayerMounted");
         const initializePlayer = () => {
+            window.ReactNativeWebView.postMessage("initializePlayer");
             try {
                 player.current = new window.Spotify.Player({
                     name: 'Web Playback SDK',
@@ -76,15 +77,18 @@ function WebPlayback(props) {
 
                 player.current.addListener('autoplay_failed', () => {
                     alert('Autoplay is not allowed by the browser autoplay rules');
+                    window.ReactNativeWebView.postMessage("Autoplay is not allowed by the browser autoplay rules");
                 });
 
                 player.current.on('initialization_error', ({ message }) => {
                     console.error('Failed to initialize', message);
+                    window.ReactNativeWebView.postMessage("Failed to initialize: " + message);
                     initializePlayer();
                 });
 
                 player.current.on('authentication_error', ({ message }) => {
                     console.error('Failed to authenticate', message);
+                    window.ReactNativeWebView.postMessage("Failed to authenticate: " + message);
                     initializePlayer();
                 });
 
@@ -101,6 +105,7 @@ function WebPlayback(props) {
         };
 
         if (webPlayerLoaded() == false) {
+            window.ReactNativeWebView.postMessage("injecting script");
             const script = document.createElement("script");
             script.src = "https://sdk.scdn.co/spotify-player.js";
             script.async = true;
@@ -123,6 +128,7 @@ function WebPlayback(props) {
 
     const addPlayerStateChangedListener = () => {
         player.current.addListener('player_state_changed', (state => {
+            window.ReactNativeWebView.postMessage("player_state_changed");
             if (!state) {
                 return;
             }
