@@ -56,7 +56,6 @@ function WebPlayback(props) {
             window.ReactNativeWebView.postMessage("initializePlayer");
             try {
                 window.ReactNativeWebView.postMessage(window.Spotify);
-                window.ReactNativeWebView.postMessage("script.src: " + script.src);
                 player.current = new window.Spotify.Player({
                     name: 'Web Playback SDK',
                     getOAuthToken: cb => {
@@ -108,9 +107,12 @@ function WebPlayback(props) {
 
         if (webPlayerLoaded() == false) {
             window.ReactNativeWebView.postMessage("injecting script" + script.src);
+            window.ReactNativeWebView.postMessage("spotify: " + window.Spotify);
             const script = document.createElement("script");
             script.src = "https://sdk.scdn.co/spotify-player.js";
             window.ReactNativeWebView.postMessage("script.src: " + script.src);
+            
+            window.ReactNativeWebView.postMessage("spotify: " + window.Spotify);
             script.async = true;
 
             document.body.appendChild(script);
