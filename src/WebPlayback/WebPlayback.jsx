@@ -51,6 +51,7 @@ function WebPlayback(props) {
 
     useEffect(() => {
         console.log("webPlayerMounted");
+        
         const initializePlayer = () => {
             try {
                 player.current = new window.Spotify.Player({
