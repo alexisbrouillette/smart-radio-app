@@ -142,8 +142,6 @@ export async function generate_queue_audio(text: string): Promise<string | null>
   try {
     const response = await fetch(`${process.env.REACT_APP_SERVER_ADRESS}/get_radio_audio`, {
       method: 'POST',
-      mode: 'cors',
-      cache: 'no-cache',
       headers: {
         'Content-Type': 'application/json'
       },
