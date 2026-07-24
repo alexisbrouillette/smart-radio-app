@@ -10,7 +10,7 @@ export const RadioItemCard = memo(({ radioItem }: { radioItem: RadioItem }) => {
         backgroundColor={"#2F2F2F"}
         textColor={"white"}
         borderWidth={0}>
-        <Skeleton isLoaded={radioItem.audio != null && radioItem.audio != 'empty'}>
+        <Skeleton isLoaded={radioItem.audio !== null && radioItem.audio !== 'empty'}>
           <CardBody backgroundColor={'purple'}>
             <Text>{radioItem.text}</Text>
           </CardBody>

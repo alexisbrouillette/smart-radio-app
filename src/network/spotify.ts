@@ -1,9 +1,7 @@
-import React from "react";
 import { currentToken } from "../spotifyTokenHandling";
 import { clientId, tokenEndpoint } from "../const/spotify";
 import { Track } from "@spotify/web-api-ts-sdk";
 import {Buffer} from 'buffer';
-import { RadioItem } from "../App";
 
 
 const simplifyQueue = (rawQueue: Track[]) => {

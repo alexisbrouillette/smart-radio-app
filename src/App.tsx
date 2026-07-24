@@ -210,10 +210,10 @@ function App() {
   const onPlayerChange = async (track: Track, player: any) => {
     //since its only called when the track is changed, we can fetch new radio items here
 
-    if(radioItems.length > 0 && track.id == radioItems[0].beforeTrackId){
+    if(radioItems.length > 0 && track.id === radioItems[0].beforeTrackId){
       pauseSong(player);
       
-      if(radioItems[0].audio != null && radioItems[0].audio != 'empty'){
+      if(radioItems[0].audio !== null && radioItems[0].audio !== 'empty'){
         await playSound(radioItems[0].audio);
         player.current.resume();
       }
@@ -247,7 +247,7 @@ function App() {
 
   const render = () => {
     try{
-      if (currentToken.access_token == null || currentToken.access_token == "" || currentToken.access_token == 'undefined') {
+      if (currentToken.access_token === null || currentToken.access_token === "" || currentToken.access_token === 'undefined') {
         return (
           <div>
             <Button colorScheme='blue' onClick={()=> connectToSpotify()}>Connect to spotify!</Button>

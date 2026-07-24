@@ -44,7 +44,7 @@ function WebPlayback(props) {
     const webPlayerLoaded = () => {
         let scripts = document.getElementsByTagName('script');
         for (let i = scripts.length; i--;) {
-            if (scripts[i].src == "https://sdk.scdn.co/spotify-player.js") return true;
+            if (scripts[i].src === "https://sdk.scdn.co/spotify-player.js") return true;
         }
         return false;
     }
@@ -95,7 +95,7 @@ function WebPlayback(props) {
             }
         };
 
-        if (webPlayerLoaded() == false) {
+        if (webPlayerLoaded() === false) {
             const script = document.createElement("script");
             script.src = "https://sdk.scdn.co/spotify-player.js";
             script.async = true;
@@ -113,14 +113,14 @@ function WebPlayback(props) {
         return () => {
             cleanup();
         };
-    }, []);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const addPlayerStateChangedListener = () => {
         player.current.addListener('player_state_changed', (state => {
             if (!state) {
                 return;
             }
-            if (state.track_window.current_track.name != current_track_name.current) {
+            if (state.track_window.current_track.name !== current_track_name.current) {
                 current_track_name.current = state.track_window.current_track.name;
                 props.onPlayerChange(state.track_window.current_track, player);
                 setCurrentTrack(state.track_window.current_track);
@@ -162,9 +162,9 @@ function WebPlayback(props) {
             addPlayerStateChangedListener();
         }
         initializeAudioContext();
-    }, [player.current, props.queue, props.radioItems]);//needs to reattach the listener so the state is updated inside the callack for the listener
+    }, [props.queue, props.radioItems]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const toggleTrackPlay = () => {
+    const toggleTrackPlay = () => { // eslint-disable-line no-unused-vars
         player.current.togglePlay();
         setPaused(!is_paused);
     }
@@ -202,7 +202,7 @@ function WebPlayback(props) {
                         <Button
                             colorScheme='blue'
                             onClick={() => startRadio()}
-                            isLoading={deviceId == ""}
+                            isLoading={deviceId === ""}
                             loadingText='Gimme a sec'>
                             Start!
                         </Button>

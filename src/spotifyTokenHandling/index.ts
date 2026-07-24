@@ -1,4 +1,3 @@
-import React from "react";
 import { authorizationEndpoint, clientId, possible, scope } from "../const/spotify";
 
 
