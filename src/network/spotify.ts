@@ -4,7 +4,8 @@ import { Track } from "@spotify/web-api-ts-sdk";
 import {Buffer} from 'buffer';
 
 
-const simplifyQueue = (rawQueue: Track[]) => { // eslint-disable-line no-unused-vars
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const simplifyQueue = (rawQueue: Track[]) => {
   const queue: any[] = [];
   rawQueue.forEach((item, i) => {
     queue.push({
