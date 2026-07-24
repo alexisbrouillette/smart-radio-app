@@ -3,13 +3,12 @@ import SkipNextIcon from '@mui/icons-material/SkipNext';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import { Button } from '@chakra-ui/react';
-import { playOnSDK, getTokenFromrefreshToken } from '../network/spotify';
-import { currentToken } from '../spotifyTokenHandling';
+import { getCurrentlyPlaying, pausePlayback, resumePlayback, skipToNext } from '../network/spotify';
 import "./style.css";
 
 import { logger } from '../components/DebugConsole';
 
-const track = {
+const defaultTrack = {
     name: "",
     album: {
         images: [
@@ -25,206 +24,17 @@ function WebPlayback(props) {
 
     const [is_paused, setPaused] = useState(false);
     const [is_active, setActive] = useState(false);
-    const [deviceId, setDeviceId] = useState("");
-    const playerStarted = useRef(false);
-    const player = useRef(null);
-    const [current_track, setCurrentTrack] = useState(track);
+    const [current_track, setCurrentTrack] = useState(defaultTrack);
     const current_track_name = useRef("");
     const audioContext = useRef(null);
     const lowVolumeSound = useRef(null);
-
-    const cleanup = () => {
-        logger.add('warn', "Cleanup triggered - disconnecting WebPlayback player");
-        if (player.current){
-            try {
-                player.current.removeListener("ready");
-                player.current.removeListener("not_ready");
-                player.current.removeListener("player_state_changed");
-                player.current.disconnect();
-            } catch (e) {
-                logger.add('error', `Cleanup error: ${e}`);
-            }
-        }
-    }
-
-    const webPlayerLoaded = () => {
-        let scripts = document.getElementsByTagName('script');
-        for (let i = scripts.length; i--;) {
-            if (scripts[i].src === "https://sdk.scdn.co/spotify-player.js") return true;
-        }
-        return false;
-    }
-
-    useEffect(() => {
-        console.log("webPlayerMounted");
-        
-        const initializePlayer = () => {
-            try {
-                player.current = new window.Spotify.Player({
-                    name: 'Web Playback SDK',
-                    getOAuthToken: async cb => {
-                        try {
-                            const res = await getTokenFromrefreshToken();
-                            if (res && res.access_token) {
-                                currentToken.save(res);
-                                cb(res.access_token);
-                            } else {
-                                cb(currentToken.access_token || props.token);
-                            }
-                        } catch (e) {
-                            cb(currentToken.access_token || props.token);
-                        }
-                    },
-                    volume: 1
-                });
-
-                player.current.addListener('ready', async ({ device_id }) => {
-                    logger.add('event', `Player ready with Device ID: ${device_id}`);
-                    setDeviceId(device_id);
-                    if (playerStarted.current) {
-                        logger.add('event', "Auto-resuming active playback on device reconnect...");
-                        try {
-                            await playOnSDK(device_id);
-                            if (player.current) {
-                                player.current.activateElement();
-                                player.current.resume();
-                            }
-                        } catch (err) {
-                            logger.add('error', `Auto-resume error: ${err}`);
-                        }
-                    }
-                });
-
-                player.current.addListener('not_ready', ({ device_id }) => {
-                    logger.add('warn', `Player gone offline (Device ID: ${device_id})`);
-                });
-
-                player.current.addListener('autoplay_failed', () => {
-                    logger.add('warn', "Autoplay failed by browser autoplay policy");
-                });
-
-                player.current.on('initialization_error', ({ message }) => {
-                    logger.add('error', `Initialization error: ${message}`);
-                    initializePlayer();
-                });
-
-                player.current.on('authentication_error', async ({ message }) => {
-                    logger.add('error', `Authentication error: ${message}. Refreshing token...`);
-                    try {
-                        if (player.current) {
-                            try { player.current.disconnect(); } catch (err) {}
-                        }
-                        const res = await getTokenFromrefreshToken();
-                        if (res && res.access_token) {
-                            currentToken.save(res);
-                            logger.add('event', "Token refreshed successfully. Reconnecting player...");
-                            initializePlayer();
-                        } else {
-                            logger.add('error', "Token refresh returned no access token");
-                        }
-                    } catch (e) {
-                        logger.add('error', `Token refresh failed: ${e}`);
-                    }
-                });
-
-                addPlayerStateChangedListener();
-
-                player.current.connect().catch(e => logger.add('error', `Connect error: ${e}`));
-                window.addEventListener('beforeunload', () => {
-                    logger.add('warn', "beforeunload window event triggered");
-                    cleanup();
-                });
-
-                // Proactive Keep-Alive Heartbeat: Pings Spotify SDK every 15s to keep WebSocket session alive
-                const heartbeatInterval = setInterval(() => {
-                    if (player.current) {
-                        player.current.getCurrentState().then(state => {
-                            if (state) {
-                                logger.add('info', "Heartbeat ping sent to Spotify SDK (session active)");
-                            }
-                        }).catch(() => {});
-                    }
-                }, 15000);
-
-                // Background Token Refresh: Refresh OAuth token proactively every 30 mins to prevent token drops
-                const tokenRefreshInterval = setInterval(async () => {
-                    try {
-                        logger.add('info', "Proactively refreshing Spotify OAuth token...");
-                        const res = await getTokenFromrefreshToken();
-                        if (res && res.access_token) {
-                            currentToken.save(res);
-                            logger.add('event', "OAuth token proactively refreshed");
-                        }
-                    } catch (err) {
-                        logger.add('warn', `Proactive token refresh error: ${err}`);
-                    }
-                }, 30 * 60 * 1000);
-
-                return () => {
-                    clearInterval(heartbeatInterval);
-                    clearInterval(tokenRefreshInterval);
-                };
-            } catch (e) {
-                logger.add('error', `Initialization Exception: ${e}`);
-            }
-        };
-
-        if (webPlayerLoaded() === false) {
-            const script = document.createElement("script");
-            script.src = "https://sdk.scdn.co/spotify-player.js";
-            script.async = true;
-
-            document.body.appendChild(script);
-
-            window.onSpotifyWebPlaybackSDKReady = () => {
-                logger.add('info', "onSpotifyWebPlaybackSDKReady event received");
-                initializePlayer();
-            };
-        } else {
-            initializePlayer();
-        }
-
-        return () => {
-            cleanup();
-        };
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-    const addPlayerStateChangedListener = () => {
-        player.current.addListener('player_state_changed', (state => {
-            if (!state) {
-                logger.add('warn', "player_state_changed received null state");
-                return;
-            }
-            
-            const isNewTrack = state.track_window.current_track.name !== current_track_name.current;
-            logger.add('info', `State: ${state.track_window.current_track.name} (paused: ${state.paused}, pos: ${Math.round(state.position/1000)}s)`);
-
-            if (isNewTrack) {
-                logger.add('event', `Track changed to: ${state.track_window.current_track.name}`);
-                current_track_name.current = state.track_window.current_track.name;
-                props.onPlayerChange(state.track_window.current_track, player);
-                setCurrentTrack(state.track_window.current_track);
-            }
-
-            player.current.getCurrentState().then(state => {
-                if (state && !playerStarted.current) {
-                    logger.add('event', "Player started playing active track");
-                    setActive(true);
-                    playerStarted.current = true;
-                    props.sdkPlayerStarted(player);
-                } else if (!state) {
-                    logger.add('warn', "getCurrentState() returned null");
-                }
-            });
-
-        }));
-    }
+    const isFirstLoad = useRef(true);
 
     const requestWakeLock = async () => {
         try {
             if ('wakeLock' in navigator) {
                 await navigator.wakeLock.request('screen');
-                console.log("Screen Wake Lock acquired");
+                logger.add('info', "Screen Wake Lock acquired");
             }
         } catch (err) {
             console.log("Wake Lock error:", err);
@@ -262,37 +72,65 @@ function WebPlayback(props) {
         requestWakeLock();
     }
 
-    useEffect(() => {
-        if (player.current) {
-            player.current.removeListener("player_state_changed");
-            addPlayerStateChangedListener();
+    const pollSpotifyState = async () => {
+        try {
+            const data = await getCurrentlyPlaying();
+            if (data && data.item) {
+                if (!is_active) {
+                    setActive(true);
+                    logger.add('event', "Connected to active Spotify player device");
+                    if (isFirstLoad.current) {
+                        isFirstLoad.current = false;
+                        props.sdkPlayerStarted({ current: { pause: pausePlayback, resume: resumePlayback } });
+                    }
+                }
+                setPaused(!data.is_playing);
+
+                if (data.item.name && data.item.name !== current_track_name.current) {
+                    logger.add('event', `Spotify track changed: ${data.item.name}`);
+                    current_track_name.current = data.item.name;
+                    setCurrentTrack(data.item);
+                    props.onPlayerChange(data.item, { current: { pause: pausePlayback, resume: resumePlayback } });
+                }
+            }
+        } catch (err) {
+            // silent poll catch
         }
+    };
+
+    // Spotify Connect Remote Polling Engine
+    useEffect(() => {
         initializeAudioContext();
+
+        pollSpotifyState();
+        const pollInterval = setInterval(pollSpotifyState, 2000);
+
+        return () => clearInterval(pollInterval);
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const toggleTrackPlay = () => { // eslint-disable-line no-unused-vars
-        player.current.togglePlay();
-        setPaused(!is_paused);
+    const startRadio = async () => {
+        logger.add('event', "Connecting Remote AI Radio Host...");
+        initializeAudioContext();
+        await pollSpotifyState();
     }
-    const pause = () => {
-        console.log("pause");
-        player.current.pause();
+
+    const pause = async () => {
+        logger.add('info', "Pausing Spotify via Remote API...");
+        await pausePlayback();
         setPaused(true);
     }
-    const play = () => {
-        console.log("play");
-        player.current.resume();
+
+    const play = async () => {
+        logger.add('info', "Resuming Spotify via Remote API...");
+        await resumePlayback();
         setPaused(false);
     }
 
-    const startRadio = async () => {
-        await playOnSDK(deviceId);
-        if (player.current) {
-            player.current.activateElement();
-            player.current.resume();
-            setPaused(false);
-        }
+    const skip = async () => {
+        logger.add('info', "Skipping to next track via Remote API...");
+        await skipToNext();
     }
+
     if (!is_active) { 
         return (
             <div className="glass-panel player-container">
@@ -325,10 +163,8 @@ function WebPlayback(props) {
                         px="8"
                         py="6"
                         fontWeight="800"
-                        onClick={() => startRadio()}
-                        isLoading={deviceId === ""}
-                        loadingText='Locating Spotify...'>
-                        Launch AI Host
+                        onClick={() => startRadio()}>
+                        Connect AI Host
                     </Button>
                 </div>
             </div>
@@ -336,11 +172,11 @@ function WebPlayback(props) {
     } else {
         return (
             <div className="glass-panel player-container">
-                <img src={current_track.album.images[0].url} className="now-playing__cover" alt="Album Cover" />
+                <img src={current_track.album.images[0]?.url} className="now-playing__cover" alt="Album Cover" />
 
                 <div className="now-playing__side">
                     <div className="now-playing__name">{current_track.name}</div>
-                    <div className="now-playing__artist">{current_track.artists[0].name}</div>
+                    <div className="now-playing__artist">{current_track.artists[0]?.name}</div>
 
                     <div className='btn-spotify-container'>
                         {is_paused ? 
@@ -352,7 +188,7 @@ function WebPlayback(props) {
                             <PauseIcon fontSize="large" /> 
                          </button>
                         }
-                        <button className="btn-spotify" onClick={() => { player.current.nextTrack() }} >
+                        <button className="btn-spotify" onClick={() => skip() } >
                             <SkipNextIcon fontSize="large"/>
                         </button>
                     </div>
@@ -362,4 +198,4 @@ function WebPlayback(props) {
     }
 }
 
-export default WebPlayback
+export default WebPlayback;
