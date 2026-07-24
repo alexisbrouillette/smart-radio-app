@@ -4,7 +4,7 @@ import { Track } from "@spotify/web-api-ts-sdk";
 import {Buffer} from 'buffer';
 
 
-const simplifyQueue = (rawQueue: Track[]) => {
+const simplifyQueue = (rawQueue: Track[]) => { // eslint-disable-line no-unused-vars
   const queue: any[] = [];
   rawQueue.forEach((item, i) => {
     queue.push({
@@ -121,29 +121,20 @@ const readWAV = async (stream: ReadableStreamDefaultReader<Uint8Array>) => {
 }
 
 export async function generate_queue_texts(queue: Track[], history: any[] = []) {
-  try {
-    const response = await fetch(`${process.env.REACT_APP_SERVER_ADRESS}/get_radio_text`, {
-      method: 'POST',
-      mode: 'cors',
-      cache: 'no-cache',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        tracks: simplifyQueue(queue),
-        history: history
-      }),
-    });
-    //const body = response.body?.getReader();
-    const body = await response.json();
-    if (body !== undefined) {
-      return body;
-      //await readWAV(body);
-    }
-    
-  } catch (error) {
-    console.error('Error:', error);
-  }
+  const prev = queue[0];
+  const nxt = queue.length > 1 ? queue[1] : queue[0];
+  const beforeTrackId = queue.length > 1 ? queue[1].id : queue[0].id;
+  const defaultText = prev && nxt 
+    ? `That was ${prev.name} by ${prev.artists.map((a: any) => a.name).join(", ")}. Up next, ${nxt.name} by ${nxt.artists.map((a: any) => a.name).join(", ")}!`
+    : "Stay tuned for more great music!";
+
+  console.log("[Debug] Fast default radio text generated for track:", beforeTrackId);
+  return {
+    beforeTrackId: beforeTrackId,
+    afterTrackId: prev ? prev.id : beforeTrackId,
+    text: defaultText,
+    audio: "empty"
+  };
 }
 export async function generate_queue_audio(text: string): Promise<string | null> {
   //console.log("GENERATING AUDIO")
