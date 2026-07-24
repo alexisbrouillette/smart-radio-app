@@ -38,15 +38,45 @@ function App() {
   const [generatingAudio, setGeneratingAudio] = useState<boolean>(false);
   const [debugText, setDebugText] = useState<string>("");
 
-  const playSound = async (b64Audio: string) => {
-    logger.add('event', "Playing TTS Audio...");
-    const audioTune = new Audio(`data:audio/wav;base64,${b64Audio}`);
-    await audioTune.play().catch(err => logger.add('error', `Audio play error: ${err}`));
+  const playSound = async (audioOrText: string) => {
+    logger.add('event', "Playing Host Voice Speech...");
+    
+    // Check if it is base64 audio WAV
+    if (audioOrText && audioOrText.length > 200 && !audioOrText.startsWith("That was")) {
+      try {
+        const audioTune = new Audio(`data:audio/wav;base64,${audioOrText}`);
+        await audioTune.play();
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            resolve(null);
+            logger.add('info', "Finished playing WAV audio");
+          }, (audioTune.duration || 3) * 1000);
+        });
+      } catch (err) {
+        logger.add('warn', `WAV audio play failed: ${err}. Falling back to browser TTS speech...`);
+      }
+    }
+
+    // Fallback: Web Speech API (synthesizes speech directly in browser out loud)
     return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve(null);
-        logger.add('info', "Finished playing TTS Audio");
-      }, (audioTune.duration || 3) * 1000);
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel(); // clear previous
+        const utterance = new SpeechSynthesisUtterance(audioOrText);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        utterance.onend = () => {
+          logger.add('info', "Finished browser speech synthesis out loud");
+          resolve(null);
+        };
+        utterance.onerror = (e) => {
+          logger.add('error', `Speech synthesis error: ${e.error}`);
+          resolve(null);
+        };
+        window.speechSynthesis.speak(utterance);
+      } else {
+        logger.add('warn', "SpeechSynthesis not supported on this browser");
+        setTimeout(resolve, 3000);
+      }
     });
   }
   useEffect(() => {
@@ -242,15 +272,16 @@ function App() {
   const onPlayerChange = async (track: Track, player: any) => {
     logger.add('event', `onPlayerChange triggered for: ${track.name} (id: ${track.id})`);
     
-    if(radioItems.length > 0 && track.id === radioItems[0].beforeTrackId){
-      logger.add('info', `Matched radio item for beforeTrackId: ${track.id}`);
+    if (radioItems.length > 0) {
+      const activeRadioItem = radioItems[0];
+      logger.add('info', `Matched radio item text: "${activeRadioItem.text}"`);
       await pauseSong(player);
       
-      if(radioItems[0].audio !== null && radioItems[0].audio !== 'empty'){
-        await playSound(radioItems[0].audio);
-      } else {
-        logger.add('warn', "Radio item audio was empty/null - skipping audio play");
-      }
+      const contentToPlay = (activeRadioItem.audio && activeRadioItem.audio !== 'empty') 
+        ? activeRadioItem.audio 
+        : activeRadioItem.text;
+
+      await playSound(contentToPlay);
       
       // Always resume music playback so Spotify session never gets stuck paused
       if (player.current) {
