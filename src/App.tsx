@@ -33,6 +33,7 @@ function App() {
   const [radioTextToAudioQueue, setRadioTextToAudioQueue] = useState<{text: string, beforeTrackId: string}[]>([]);
 
   const radioTextToAudioQueueRef = useRef<{text: string, beforeTrackId: string}[]>([]);
+  const pastTransitions = useRef<{song: string, artist: string, text: string}[]>([]);
   const [generatingAudio, setGeneratingAudio] = useState<boolean>(false);
   const [debugText, setDebugText] = useState<string>("");
 
@@ -77,7 +78,20 @@ function App() {
 
   useEffect(() => {
     const getRadioTexts = async (tracks: Track[]) => {
-      const radioText = await generate_queue_texts(tracks);
+      const radioText = await generate_queue_texts(tracks, pastTransitions.current);
+      if (radioText && radioText.text) {
+        const nextTrack = tracks[1];
+        if (nextTrack) {
+          pastTransitions.current.push({
+            song: nextTrack.name,
+            artist: nextTrack.artists.map((a: any) => a.name).join(", "),
+            text: radioText.text
+          });
+          if (pastTransitions.current.length > 5) {
+            pastTransitions.current.shift();
+          }
+        }
+      }
       //const radioText = {text: tracks.map(t => t.name).join(", "), beforeTrackId: tracks[tracks.length-1].id, audio: null};
       //await sleep(2000);
       const newRadioItems = [...radioItemsRef.current];

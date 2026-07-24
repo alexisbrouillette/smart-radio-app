@@ -120,7 +120,7 @@ const readWAV = async (stream: ReadableStreamDefaultReader<Uint8Array>) => {
   //await audio.play();
 }
 
-export async function generate_queue_texts(queue: Track[]) {
+export async function generate_queue_texts(queue: Track[], history: any[] = []) {
   try {
     const response = await fetch(`${process.env.REACT_APP_SERVER_ADRESS}/get_radio_text`, {
       method: 'POST',
@@ -129,7 +129,10 @@ export async function generate_queue_texts(queue: Track[]) {
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(simplifyQueue(queue)),
+      body: JSON.stringify({
+        tracks: simplifyQueue(queue),
+        history: history
+      }),
     });
     //const body = response.body?.getReader();
     const body = await response.json();
