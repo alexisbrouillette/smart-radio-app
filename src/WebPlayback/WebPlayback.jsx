@@ -264,7 +264,7 @@ function WebPlayback(props) {
             addPlayerStateChangedListener();
         }
         initializeAudioContext();
-    }, [props.queue, props.radioItems]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const toggleTrackPlay = () => { // eslint-disable-line no-unused-vars
         player.current.togglePlay();
