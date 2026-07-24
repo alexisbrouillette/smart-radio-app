@@ -1,4 +1,4 @@
-import { currentToken } from "../spotifyTokenHandling";
+import { currentToken, getRedirectUri } from "../spotifyTokenHandling";
 import { clientId, tokenEndpoint } from "../const/spotify";
 import { Track } from "@spotify/web-api-ts-sdk";
 import {Buffer} from 'buffer';
@@ -19,41 +19,60 @@ const simplifyQueue = (rawQueue: Track[]) => {
   return queue;
 }
 export async function getUserQueue() {
-  const maxRetries = 5;
-  let attempts = 0;
-
-  while (attempts < maxRetries) {
-    try {
-      const url = "https://api.spotify.com/v1/me/player/queue";
-      console.log(`Fetching user queue from URL: ${url}`);
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: { 'Authorization': 'Bearer ' + currentToken.access_token },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Error fetching user queue: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-
-      if (data.queue.length === 0) {
-        throw new Error('Queue is empty');
-      }
-
-      return data;
-    } catch (error) {
-      console.error(`Attempt ${attempts + 1} - Error:`, error);
-      attempts++;
-      if (attempts < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      } else {
-        return null;
-      }
+  try {
+    const token = currentToken.access_token;
+    if (!token) {
+      console.warn("getUserQueue called with no active Spotify access token");
+      return undefined;
     }
+
+    const url = "https://api.spotify.com/v1/me/player/queue";
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 'Authorization': 'Bearer ' + token },
+    });
+
+    if (response.status === 204 || response.status === 401) {
+      console.warn(`Spotify Queue API returned HTTP ${response.status}`);
+      return undefined;
+    }
+
+    if (!response.ok) {
+      console.error(`Spotify Queue API error HTTP ${response.status}: ${response.statusText}`);
+      return undefined;
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error(`getUserQueue exception: ${error}`);
+    return undefined;
   }
 }
 
+export async function getCurrentlyPlaying() {
+  try {
+    const token = currentToken.access_token;
+    if (!token) return null;
+
+    const response = await fetch("https://api.spotify.com/v1/me/player/currently-playing", {
+      method: 'GET',
+      headers: { 'Authorization': 'Bearer ' + token },
+    });
+
+    if (response.status === 204 || response.status === 401) {
+      return null;
+    }
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return await response.json();
+  } catch (err) {
+    return null;
+  }
+}
 
 export async function getToken(code:any) {
     let code_verifier = localStorage.getItem('code_verifier');
@@ -68,7 +87,7 @@ export async function getToken(code:any) {
         client_id: clientId,
         grant_type: 'authorization_code',
         code: code,
-        redirect_uri: process.env.REACT_APP_FRONTEND_URL ?? '',
+        redirect_uri: getRedirectUri(),
         code_verifier: code_verifier,
       }),
     });
@@ -173,14 +192,7 @@ export async function generate_queue_audio(text: string): Promise<string | null>
   }
 }
 
-export async function getCurrentlyPlaying() {
-  const response = await fetch("https://api.spotify.com/v1/me/player/currently-playing", {
-    method: 'GET',
-    headers: { 'Authorization': 'Bearer ' + currentToken.access_token },
-  });
 
-  return await response.json();
-}
 
 export async function playOnSDK(deviceId: string) {
   console.log("PLAYING ON SDK");

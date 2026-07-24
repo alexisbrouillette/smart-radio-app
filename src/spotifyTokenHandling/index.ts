@@ -5,6 +5,14 @@ import { authorizationEndpoint, clientId, possible, scope } from "../const/spoti
 
 
 
+export const getRedirectUri = () => {
+  if (process.env.REACT_APP_FRONTEND_URL) {
+    return process.env.REACT_APP_FRONTEND_URL;
+  }
+  // Dynamic fallback: automatically use current domain (e.g. https://smart-radio-app.vercel.app/)
+  return window.location.origin + '/';
+};
+
 export async function redirectToSpotifyAuthorize() {
   
     const randomValues = crypto.getRandomValues(new Uint8Array(64));
@@ -23,14 +31,13 @@ export async function redirectToSpotifyAuthorize() {
     window.localStorage.setItem('code_verifier', code_verifier);
   
     const authUrl = new URL(authorizationEndpoint)
-    console.log(authUrl);
     const params = {
       response_type: 'code',
       client_id: clientId,
       scope: scope,
       code_challenge_method: 'S256',
       code_challenge: code_challenge_base64,
-      redirect_uri: process.env.REACT_APP_FRONTEND_URL ?? '',
+      redirect_uri: getRedirectUri(),
     };
   
     authUrl.search = new URLSearchParams(params).toString();
