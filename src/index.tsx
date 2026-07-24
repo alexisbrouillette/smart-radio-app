@@ -20,6 +20,17 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/service-worker.js').then(registration => {
       console.log('ServiceWorker registration successful with scope: ', registration.scope);
+      registration.onupdatefound = () => {
+        const installingWorker = registration.installing;
+        if (installingWorker) {
+          installingWorker.onstatechange = () => {
+            if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              console.log('New PWA version detected. Auto-reloading for latest update...');
+              window.location.reload();
+            }
+          };
+        }
+      };
     }).catch(error => {
       console.log('ServiceWorker registration failed: ', error);
     });
