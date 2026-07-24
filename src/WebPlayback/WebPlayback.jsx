@@ -113,7 +113,23 @@ function WebPlayback(props) {
     const startRadio = async () => {
         logger.add('event', "Connecting Remote AI Radio Host...");
         initializeAudioContext();
-        await pollSpotifyState();
+        try {
+            await resumePlayback();
+        } catch (e) {}
+        const data = await getCurrentlyPlaying();
+        if (data && data.item) {
+            isActiveRef.current = true;
+            setActive(true);
+            current_track_name.current = data.item.name;
+            setCurrentTrack(data.item);
+            props.sdkPlayerStarted({ current: { pause: pausePlayback, resume: resumePlayback } });
+            props.onPlayerChange(data.item, { current: { pause: pausePlayback, resume: resumePlayback } });
+        } else {
+            // Force activate UI if user clicked connect
+            isActiveRef.current = true;
+            setActive(true);
+            props.sdkPlayerStarted({ current: { pause: pausePlayback, resume: resumePlayback } });
+        }
     }
 
     const pause = async () => {
