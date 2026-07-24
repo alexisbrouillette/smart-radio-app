@@ -139,6 +139,17 @@ function WebPlayback(props) {
         }));
     }
 
+    const requestWakeLock = async () => {
+        try {
+            if ('wakeLock' in navigator) {
+                await navigator.wakeLock.request('screen');
+                console.log("Screen Wake Lock acquired");
+            }
+        } catch (err) {
+            console.log("Wake Lock error:", err);
+        }
+    };
+
     const initializeAudioContext = () => {
         if (!audioContext.current) {
             try {
@@ -147,7 +158,7 @@ function WebPlayback(props) {
                 const gainNode = audioContext.current.createGain();
                 oscillator.type = 'sine';
                 oscillator.frequency.setValueAtTime(440, audioContext.current.currentTime);
-                gainNode.gain.setValueAtTime(0.001, audioContext.current.currentTime);
+                gainNode.gain.setValueAtTime(0.0001, audioContext.current.currentTime);
                 oscillator.connect(gainNode);
                 gainNode.connect(audioContext.current.destination);
                 oscillator.start();
@@ -159,6 +170,15 @@ function WebPlayback(props) {
         if (audioContext.current && audioContext.current.state === 'suspended') {
             audioContext.current.resume().catch(() => {});
         }
+
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new window.MediaMetadata({
+                title: "Smart Radio Host",
+                artist: "AI Radio Host",
+                album: "Live Station Broadcast"
+            });
+        }
+        requestWakeLock();
     }
 
     useEffect(() => {

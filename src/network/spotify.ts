@@ -207,3 +207,37 @@ export async function playOnSDK(deviceId: string) {
     body: JSON.stringify({ device_ids: [deviceId] })
   });
 }
+
+export async function pausePlayback() {
+  try {
+    await fetch("https://api.spotify.com/v1/me/player/pause", {
+      method: 'PUT',
+      headers: { 'Authorization': 'Bearer ' + currentToken.access_token }
+    });
+  } catch (e) {
+    console.error("Error pausing Spotify playback:", e);
+  }
+}
+
+export async function resumePlayback() {
+  try {
+    await fetch("https://api.spotify.com/v1/me/player/play", {
+      method: 'PUT',
+      headers: { 'Authorization': 'Bearer ' + currentToken.access_token }
+    });
+  } catch (e) {
+    console.error("Error resuming Spotify playback:", e);
+  }
+}
+
+export async function skipToNext() {
+  try {
+    await fetch("https://api.spotify.com/v1/me/player/next", {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + currentToken.access_token }
+    });
+  } catch (e) {
+    console.error("Error skipping Spotify track:", e);
+  }
+}
+
