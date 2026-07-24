@@ -3,7 +3,8 @@ import SkipNextIcon from '@mui/icons-material/SkipNext';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import { Button } from '@chakra-ui/react';
-import {playOnSDK} from '../network/spotify';
+import { playOnSDK, getTokenFromrefreshToken } from '../network/spotify';
+import { currentToken } from '../spotifyTokenHandling';
 import "./style.css";
 
 import { logger } from '../components/DebugConsole';
@@ -61,15 +62,37 @@ function WebPlayback(props) {
             try {
                 player.current = new window.Spotify.Player({
                     name: 'Web Playback SDK',
-                    getOAuthToken: cb => {
-                        cb(props.token);
+                    getOAuthToken: async cb => {
+                        try {
+                            const res = await getTokenFromrefreshToken();
+                            if (res && res.access_token) {
+                                currentToken.save(res);
+                                cb(res.access_token);
+                            } else {
+                                cb(currentToken.access_token || props.token);
+                            }
+                        } catch (e) {
+                            cb(currentToken.access_token || props.token);
+                        }
                     },
                     volume: 1
                 });
 
-                player.current.addListener('ready', ({ device_id }) => {
+                player.current.addListener('ready', async ({ device_id }) => {
                     logger.add('event', `Player ready with Device ID: ${device_id}`);
                     setDeviceId(device_id);
+                    if (playerStarted.current) {
+                        logger.add('event', "Auto-resuming active playback on device reconnect...");
+                        try {
+                            await playOnSDK(device_id);
+                            if (player.current) {
+                                player.current.activateElement();
+                                player.current.resume();
+                            }
+                        } catch (err) {
+                            logger.add('error', `Auto-resume error: ${err}`);
+                        }
+                    }
                 });
 
                 player.current.addListener('not_ready', ({ device_id }) => {
@@ -85,9 +108,18 @@ function WebPlayback(props) {
                     initializePlayer();
                 });
 
-                player.current.on('authentication_error', ({ message }) => {
-                    logger.add('error', `Authentication error: ${message}`);
-                    initializePlayer();
+                player.current.on('authentication_error', async ({ message }) => {
+                    logger.add('error', `Authentication error: ${message}. Refreshing token...`);
+                    try {
+                        const res = await getTokenFromrefreshToken();
+                        if (res && res.access_token) {
+                            currentToken.save(res);
+                            logger.add('event', "Token refreshed successfully. Reconnecting player...");
+                            initializePlayer();
+                        }
+                    } catch (e) {
+                        logger.add('error', `Token refresh failed: ${e}`);
+                    }
                 });
 
                 addPlayerStateChangedListener();
@@ -97,6 +129,36 @@ function WebPlayback(props) {
                     logger.add('warn', "beforeunload window event triggered");
                     cleanup();
                 });
+
+                // Proactive Keep-Alive Heartbeat: Pings Spotify SDK every 15s to keep WebSocket session alive
+                const heartbeatInterval = setInterval(() => {
+                    if (player.current) {
+                        player.current.getCurrentState().then(state => {
+                            if (state) {
+                                logger.add('info', "Heartbeat ping sent to Spotify SDK (session active)");
+                            }
+                        }).catch(() => {});
+                    }
+                }, 15000);
+
+                // Background Token Refresh: Refresh OAuth token proactively every 30 mins to prevent token drops
+                const tokenRefreshInterval = setInterval(async () => {
+                    try {
+                        logger.add('info', "Proactively refreshing Spotify OAuth token...");
+                        const res = await getTokenFromrefreshToken();
+                        if (res && res.access_token) {
+                            currentToken.save(res);
+                            logger.add('event', "OAuth token proactively refreshed");
+                        }
+                    } catch (err) {
+                        logger.add('warn', `Proactive token refresh error: ${err}`);
+                    }
+                }, 30 * 60 * 1000);
+
+                return () => {
+                    clearInterval(heartbeatInterval);
+                    clearInterval(tokenRefreshInterval);
+                };
             } catch (e) {
                 logger.add('error', `Initialization Exception: ${e}`);
             }
