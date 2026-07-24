@@ -225,21 +225,26 @@ export async function playOnSDK(deviceId: string) {
 
 export async function pausePlayback() {
   try {
+    const token = currentToken.access_token;
+    if (!token) return;
     await fetch("https://api.spotify.com/v1/me/player/pause", {
       method: 'PUT',
-      headers: { 'Authorization': 'Bearer ' + currentToken.access_token }
+      headers: { 'Authorization': 'Bearer ' + token }
     });
-  } catch (e) {
-    console.error("Error pausing Spotify playback:", e);
-  }
+  } catch (e) {}
 }
 
 export async function resumePlayback() {
   try {
-    await fetch("https://api.spotify.com/v1/me/player/play", {
+    const token = currentToken.access_token;
+    if (!token) return;
+    const res = await fetch("https://api.spotify.com/v1/me/player/play", {
       method: 'PUT',
-      headers: { 'Authorization': 'Bearer ' + currentToken.access_token }
+      headers: { 'Authorization': 'Bearer ' + token }
     });
+    if (res.status === 403 || res.status === 404) {
+      console.warn("Spotify play: No active device found. Please start playing a song in your Spotify app first.");
+    }
   } catch (e) {
     console.error("Error resuming Spotify playback:", e);
   }
@@ -247,10 +252,15 @@ export async function resumePlayback() {
 
 export async function skipToNext() {
   try {
-    await fetch("https://api.spotify.com/v1/me/player/next", {
+    const token = currentToken.access_token;
+    if (!token) return;
+    const res = await fetch("https://api.spotify.com/v1/me/player/next", {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + currentToken.access_token }
+      headers: { 'Authorization': 'Bearer ' + token }
     });
+    if (res.status === 403 || res.status === 404) {
+      console.warn("Spotify skip: No active device found");
+    }
   } catch (e) {
     console.error("Error skipping Spotify track:", e);
   }

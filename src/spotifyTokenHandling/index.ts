@@ -9,8 +9,9 @@ export const getRedirectUri = () => {
   if (process.env.REACT_APP_FRONTEND_URL) {
     return process.env.REACT_APP_FRONTEND_URL;
   }
-  // Dynamic fallback: automatically use current domain (e.g. https://smart-radio-app.vercel.app/)
-  return window.location.origin + '/';
+  // Spotify API policy forbids http://localhost. Replace localhost with 127.0.0.1 for local dev.
+  const origin = window.location.origin.replace('localhost', '127.0.0.1');
+  return origin;
 };
 
 export async function redirectToSpotifyAuthorize() {

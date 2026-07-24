@@ -36,7 +36,7 @@ function App() {
   const radioTextToAudioQueueRef = useRef<{text: string, beforeTrackId: string}[]>([]);
   const pastTransitions = useRef<{song: string, artist: string, text: string}[]>([]);
   const [generatingAudio, setGeneratingAudio] = useState<boolean>(false);
-  const [debugText, setDebugText] = useState<string>("");
+  const [debugText] = useState<string>("");
 
   const playSound = async (audioOrText: string) => {
     logger.add('event', "Playing Host Voice Speech...");
@@ -122,29 +122,30 @@ function App() {
   useEffect(() => {
     const getRadioTexts = async (tracks: Track[]) => {
       const radioText = await generate_queue_texts(tracks, pastTransitions.current);
-      if (radioText && radioText.text) {
-        const nextTrack = tracks[1];
-        if (nextTrack) {
-          pastTransitions.current.push({
-            song: nextTrack.name,
-            artist: nextTrack.artists.map((a: any) => a.name).join(", "),
-            text: radioText.text
-          });
-          if (pastTransitions.current.length > 5) {
-            pastTransitions.current.shift();
+      if (radioText && radioText.text && radioText.beforeTrackId) {
+        // Prevent duplicate radio items for the same track ID
+        const isDuplicate = radioItemsRef.current.some(item => item.beforeTrackId === radioText.beforeTrackId);
+        if (!isDuplicate) {
+          const nextTrack = tracks[1];
+          if (nextTrack) {
+            pastTransitions.current.push({
+              song: nextTrack.name,
+              artist: nextTrack.artists.map((a: any) => a.name).join(", "),
+              text: radioText.text
+            });
+            if (pastTransitions.current.length > 5) {
+              pastTransitions.current.shift();
+            }
           }
+
+          const newRadioItems = [...radioItemsRef.current, radioText];
+          const newTextToAudioQueue = [...radioTextToAudioQueue, {text: radioText.text, beforeTrackId: radioText.beforeTrackId}];
+          setRadioTextToAudioQueue(newTextToAudioQueue);
+          radioTextToAudioQueueRef.current = newTextToAudioQueue;
+          radioItemsRef.current = newRadioItems;
+          setRadioItems(newRadioItems);
         }
       }
-      //const radioText = {text: tracks.map(t => t.name).join(", "), beforeTrackId: tracks[tracks.length-1].id, audio: null};
-      //await sleep(2000);
-      const newRadioItems = [...radioItemsRef.current];
-      newRadioItems.push(radioText);
-      const newTextToAudioQueue = [...radioTextToAudioQueue, {text: radioText.text, beforeTrackId: radioText.beforeTrackId}]
-      setRadioTextToAudioQueue(newTextToAudioQueue);
-      radioTextToAudioQueueRef.current = newTextToAudioQueue;
-      radioItemsRef.current = newRadioItems;
-      setRadioItems(newRadioItems);
-      //setFetchedNewRadioItems(true); //need to only update this when the song is changed
     }
     if (fetchingRadioFor.length > 0) {
       getRadioTexts(fetchingRadioFor);
@@ -181,7 +182,7 @@ function App() {
 
 
   useEffect(() => {
-    if(fetchedNewRadioItems) {
+    if (fetchedNewRadioItems) {
       setFetchedNewRadioItems(false);
       
       if (queue.length === 0) return;
@@ -189,19 +190,24 @@ function App() {
       let newFetchingRadioFor: Track[] = [];
 
       if (radioItems.length === 0) {
-        newFetchingRadioFor = queue.slice(0, Math.min(2, queue.length));
+        // First radio item is placed before Song 3 (introducing transition between Song 2 and Song 3)
+        if (queue.length >= 3) {
+          newFetchingRadioFor = [queue[1], queue[2]];
+        } else if (queue.length === 2) {
+          newFetchingRadioFor = [queue[0], queue[1]];
+        }
       } else {
         const lastRadioItem = radioItems[radioItems.length - 1];
         const lastIndex = queue.findIndex((track) => track.id === lastRadioItem.beforeTrackId);
-        if (lastIndex > -1 && lastIndex < queue.length - 1) {
-          newFetchingRadioFor = [queue[lastIndex + 1]];
-          if (lastIndex < queue.length - 2) {
-            newFetchingRadioFor.push(queue[lastIndex + 2]);
-          }
+        
+        // Advance by 2 songs (Song 2 -> Song 3, then Song 4 -> Song 5)
+        if (lastIndex > -1 && lastIndex + 2 < queue.length) {
+          newFetchingRadioFor = [queue[lastIndex + 1], queue[lastIndex + 2]];
         }
       }
 
       if (newFetchingRadioFor.length > 0) {
+        logger.add('info', `Queueing AI host transition between "${newFetchingRadioFor[0].name}" and "${newFetchingRadioFor[1].name}"`);
         setFetchingRadioFor(newFetchingRadioFor);
       }
     }
@@ -221,11 +227,17 @@ function App() {
 
   //this fn is called ONLY when the track is changed
   const onPlayerChange = async (track: Track, player: any) => {
-    logger.add('event', `Track changed to: ${track.name}`);
+    logger.add('event', `Track changed to: "${track.name}" (ID: ${track.id})`);
     
-    if (radioItems.length > 0) {
-      const activeRadioItem = radioItems[0];
-      logger.add('info', `Playing radio host announcement: "${activeRadioItem.text}"`);
+    // Re-fetch live Spotify queue so queue state stays updated across track changes
+    await getQueue();
+
+    // STRICT MATCH: Only play radio item intended specifically for this track
+    const radioItemIndex = radioItemsRef.current.findIndex(item => item.beforeTrackId === track.id);
+    
+    if (radioItemIndex > -1) {
+      const activeRadioItem = radioItemsRef.current[radioItemIndex];
+      logger.add('info', `Playing matching radio host announcement for "${track.name}": "${activeRadioItem.text}"`);
       await pauseSong(player);
       
       const contentToPlay = (activeRadioItem.audio && activeRadioItem.audio !== 'empty') 
@@ -239,11 +251,12 @@ function App() {
         player.current.resume().catch((err: any) => logger.add('error', `Resume error: ${err}`));
       }
 
-      const updatedRadioItems = radioItems.slice(1);
+      // Remove played radio item
+      const updatedRadioItems = radioItemsRef.current.filter((_, idx) => idx !== radioItemIndex);
       setRadioItems(updatedRadioItems);
       radioItemsRef.current = updatedRadioItems;
     } else {
-      logger.add('info', `No pending radio host announcement for: ${track.name}`);
+      logger.add('info', `No matching radio host announcement for: "${track.name}" (Target ID: ${track.id})`);
     }
 
     setFetchedNewRadioItems(true);
@@ -260,36 +273,38 @@ function App() {
     const uniqueTracks = res.queue.filter((track: Track, index: number, self: Track[]) =>
       index === self.findIndex((t) => t.id === track.id)
     );
-    logger.add('event', `Queue updated successfully: ${uniqueTracks.length} tracks loaded`);
+    logger.add('event', `Queue updated: ${uniqueTracks.length} tracks. Now playing: "${uniqueTracks[0]?.name}"`);
     setQueue(uniqueTracks);
     setFetchedNewRadioItems(true);
     return uniqueTracks;
   }
 
   const sdkPlayerStarted = async (player: any) => {
-    player.current.activateElement();
-    player.current.resume();
-    setDebugText(player.current.state);
     const newQueue = await getQueue();
-    setQueue(newQueue as Track[]);
-
-    if (newQueue === undefined) return;
-    setFetchingRadioFor([newQueue[0], newQueue[1]]);//for the first two tracks
+    if (newQueue && newQueue.length > 0) {
+      setQueue(newQueue as Track[]);
+      setFetchingRadioFor(newQueue.slice(0, Math.min(2, newQueue.length)));
+    }
   }
 
   const renderQueue = () => {
     if (queue.length > 0) {
       const renderList: (RadioItem | Track)[] = [...queue];
+
+      // Insert radio transition cards directly before their target track ID
       for (let i = 0; i < radioItems.length; i++) {
         const radioItem = radioItems[i];
         const index = renderList.findIndex((item) => 'name' in item && item.id === radioItem.beforeTrackId);
-        renderList.splice(index, 0, radioItem);
+        if (index > -1) {
+          renderList.splice(index, 0, radioItem);
+        }
       }
-      return renderList.map((elem) => {
+
+      return renderList.map((elem, idx) => {
         if ('album' in elem)
-          return <SongCard song={elem} key={elem.id} />;
+          return <SongCard song={elem} key={elem.id + "_" + idx} />;
         else
-          return <RadioItemCard radioItem={elem} key={elem.beforeTrackId+"radio"} />;
+          return <RadioItemCard radioItem={elem} key={(elem as RadioItem).beforeTrackId + "_radio_" + idx} />;
       });
     }
     return null;
@@ -329,10 +344,10 @@ function App() {
           {/* {queue.length == 0  ? <Button colorScheme='blue' onClick={() => startRadio()}>Start!</Button> : null} */}
           <WebPlayback 
             token={currentToken.access_token} 
+            radioItems={radioItems}
             onPlayerChange={onPlayerChange}
             sdkPlayerStarted={sdkPlayerStarted}
             queue={queue}
-            radioItems={radioItems}
           />
           {queue.length > 0 && (
             <div>

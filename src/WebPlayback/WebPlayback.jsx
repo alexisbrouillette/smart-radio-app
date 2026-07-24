@@ -73,6 +73,11 @@ function WebPlayback(props) {
 
     const isActiveRef = useRef(false);
 
+    const pollIntervalRef = useRef(null);
+    const transitionTimerRef = useRef(null);
+    const scheduledTrackIdRef = useRef(null);
+    const lastProgressMsRef = useRef(0);
+
     const pollSpotifyState = async () => {
         try {
             const data = await getCurrentlyPlaying();
@@ -84,12 +89,44 @@ function WebPlayback(props) {
                     current_track_name.current = data.item.name;
                     setCurrentTrack(data.item);
                     props.sdkPlayerStarted({ current: { pause: pausePlayback, resume: resumePlayback } });
-                    props.onPlayerChange(data.item, { current: { pause: pausePlayback, resume: resumePlayback } });
                 }
                 setPaused(!data.is_playing);
 
+                // Precision Local Timer: ONLY schedule pause timer if a radio host item is pending!
+                const hasPendingRadioItem = props.radioItems && props.radioItems.length > 0;
+
+                if (hasPendingRadioItem && data.is_playing && data.progress_ms && data.item.duration_ms) {
+                    const remainingMs = data.item.duration_ms - data.progress_ms;
+                    const progressDelta = Math.abs(data.progress_ms - (lastProgressMsRef.current + 2000));
+                    
+                    // If track changed, or track seek occurred (>3s jump), re-synchronize precision timer
+                    const userSeeked = progressDelta > 3000;
+                    const needsScheduling = scheduledTrackIdRef.current !== data.item.id || userSeeked;
+
+                    if (remainingMs > 500 && remainingMs < 600000 && needsScheduling) {
+                        scheduledTrackIdRef.current = data.item.id;
+                        lastProgressMsRef.current = data.progress_ms;
+
+                        if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+                        
+                        const msg = `Precision timer scheduled: ${Math.round(remainingMs / 1000)}s remaining for "${data.item.name}"`;
+                        console.log(msg);
+                        logger.add('info', msg);
+                        
+                        transitionTimerRef.current = setTimeout(() => {
+                            const fireMsg = `Precision track end timer fired for "${data.item.name}"! Pausing playback...`;
+                            console.log(fireMsg);
+                            logger.add('event', fireMsg);
+                            pausePlayback();
+                        }, Math.max(0, remainingMs - 150));
+                    }
+                } else {
+                    console.log(`Poll tick: is_playing=${data.is_playing}, progress=${data.progress_ms}, duration=${data.item?.duration_ms}, pendingRadioItems=${props.radioItems?.length}`);
+                }
+
                 if (data.item.name && data.item.name !== current_track_name.current) {
-                    logger.add('event', `Spotify track changed: ${data.item.name}`);
+                    logger.add('event', `Spotify track changed: "${current_track_name.current}" -> "${data.item.name}"`);
+                    if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
                     current_track_name.current = data.item.name;
                     setCurrentTrack(data.item);
                     props.onPlayerChange(data.item, { current: { pause: pausePlayback, resume: resumePlayback } });
@@ -105,9 +142,12 @@ function WebPlayback(props) {
         initializeAudioContext();
 
         pollSpotifyState();
-        const pollInterval = setInterval(pollSpotifyState, 2000);
+        pollIntervalRef.current = setInterval(pollSpotifyState, 2000);
 
-        return () => clearInterval(pollInterval);
+        return () => {
+            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+            if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+        };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const startRadio = async () => {
