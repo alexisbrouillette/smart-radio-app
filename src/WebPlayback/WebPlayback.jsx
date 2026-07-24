@@ -28,7 +28,6 @@ function WebPlayback(props) {
     const current_track_name = useRef("");
     const audioContext = useRef(null);
     const lowVolumeSound = useRef(null);
-    const isFirstLoad = useRef(true);
 
     const requestWakeLock = async () => {
         try {
@@ -72,17 +71,20 @@ function WebPlayback(props) {
         requestWakeLock();
     }
 
+    const isActiveRef = useRef(false);
+
     const pollSpotifyState = async () => {
         try {
             const data = await getCurrentlyPlaying();
             if (data && data.item) {
-                if (!is_active) {
+                if (!isActiveRef.current) {
+                    isActiveRef.current = true;
                     setActive(true);
-                    logger.add('event', "Connected to active Spotify player device");
-                    if (isFirstLoad.current) {
-                        isFirstLoad.current = false;
-                        props.sdkPlayerStarted({ current: { pause: pausePlayback, resume: resumePlayback } });
-                    }
+                    logger.add('event', `Connected to active Spotify player: ${data.item.name}`);
+                    current_track_name.current = data.item.name;
+                    setCurrentTrack(data.item);
+                    props.sdkPlayerStarted({ current: { pause: pausePlayback, resume: resumePlayback } });
+                    props.onPlayerChange(data.item, { current: { pause: pausePlayback, resume: resumePlayback } });
                 }
                 setPaused(!data.is_playing);
 
