@@ -184,22 +184,16 @@ function App() {
     if(fetchedNewRadioItems) {
       setFetchedNewRadioItems(false);
       
-      if (queue.length === 0) {
-        logger.add('warn', "Queue is empty - cannot generate radio items yet");
-        return;
-      }
+      if (queue.length === 0) return;
 
       let newFetchingRadioFor: Track[] = [];
 
-      if (radioItemsRef.current.length === 0) {
-        // Initial load: fetch radio text for the first 2 tracks in queue
-        logger.add('event', `Initial radio text generation for: ${queue[0]?.name}`);
+      if (radioItems.length === 0) {
         newFetchingRadioFor = queue.slice(0, Math.min(2, queue.length));
       } else {
-        const lastRadioItem = radioItemsRef.current[radioItemsRef.current.length - 1];
+        const lastRadioItem = radioItems[radioItems.length - 1];
         const lastIndex = queue.findIndex((track) => track.id === lastRadioItem.beforeTrackId);
         if (lastIndex > -1 && lastIndex < queue.length - 1) {
-          logger.add('event', `Generating next radio text for: ${queue[lastIndex + 1]?.name}`);
           newFetchingRadioFor = [queue[lastIndex + 1]];
           if (lastIndex < queue.length - 2) {
             newFetchingRadioFor.push(queue[lastIndex + 2]);
@@ -211,72 +205,9 @@ function App() {
         setFetchingRadioFor(newFetchingRadioFor);
       }
     }
-  }, [fetchedNewRadioItems, queue]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchedNewRadioItems]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    if (trackChanged.current) {
-      trackChanged.current = false;
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-
-  const connectToSpotify = async () => {
-    redirectToSpotifyAuthorize();
-    //const token = getToken();
-    // const res = await SpotifyApi.performUserAuthorization(clientId, redirectUrl, scopeArr, "");
-    // console.log("BItch: ");
-    // console.log(res);
-    // currentToken.save({
-    //   access_token: res.accessToken.access_token,
-    //   refresh_token: res.accessToken.refresh_token,
-    //   expires_in: res.accessToken.expires_in
-    // });
-    // console.log(currentToken);
-    //console.log("Token: ", token);
-
-    //setSpotifyApi(SpotifyApi.withClientCredentials(clientId, res.accessToken.access_token));
-
-  }
-
-  const getQueue = async () => {
-    logger.add('info', "Fetching user queue from Spotify API...");
-    const res = await getUserQueue();
-    if (!res || !res.queue || res.queue.length === 0 || !('album' in res.queue[0])) {
-      logger.add('warn', "Queue returned empty or non-music tracks from Spotify API");
-      return;
-    }
-
-    // removes duplicates
-    const uniqueTracks = res.queue.filter((track: Track, index: number, self: Track[]) =>
-      index === self.findIndex((t) => t.id === track.id)
-    );
-    logger.add('event', `Queue updated successfully: ${uniqueTracks.length} tracks loaded`);
-    setQueue(uniqueTracks);
-    setFetchedNewRadioItems(true);
-    return uniqueTracks;
-  }
-
-
-
-  const renderQueue = () => {
-    if (queue.length > 0) {
-      const renderList: (RadioItem | Track)[] = [...queue];
-      for (let i = 0; i < radioItems.length; i++) {
-        const radioItem = radioItems[i];
-        const index = renderList.findIndex((item) => 'name' in item && item.id === radioItem.beforeTrackId);
-        renderList.splice(index, 0, radioItem);
-      }
-      return renderList.map((elem) => {
-        if ('album' in elem)
-          return <SongCard song={elem} key={elem.id} />;
-        else
-          return <RadioItemCard radioItem={elem} key={elem.beforeTrackId+"radio"} />;
-      });
-    }
-    return null;
-  }
-
-  const pauseSong = async (player:any) => {
+  const pauseSong = async (player: any) => {
     try {
       if (player.current) {
         logger.add('info', "Pausing Spotify track for radio host transition...");
@@ -290,11 +221,11 @@ function App() {
 
   //this fn is called ONLY when the track is changed
   const onPlayerChange = async (track: Track, player: any) => {
-    logger.add('event', `onPlayerChange triggered for: ${track.name} (id: ${track.id}) [pending radio items in ref: ${radioItemsRef.current.length}]`);
+    logger.add('event', `Track changed to: ${track.name}`);
     
-    if (radioItemsRef.current.length > 0) {
-      const activeRadioItem = radioItemsRef.current[0];
-      logger.add('info', `Matched radio item text: "${activeRadioItem.text}" (has audio: ${!!activeRadioItem.audio && activeRadioItem.audio !== 'empty'})`);
+    if (radioItems.length > 0) {
+      const activeRadioItem = radioItems[0];
+      logger.add('info', `Playing radio host announcement: "${activeRadioItem.text}"`);
       await pauseSong(player);
       
       const contentToPlay = (activeRadioItem.audio && activeRadioItem.audio !== 'empty') 
@@ -303,38 +234,36 @@ function App() {
 
       await playSound(contentToPlay);
       
-      // Always resume music playback so Spotify session never gets stuck paused
       if (player.current) {
         logger.add('info', "Resuming Spotify music playback...");
-        player.current.resume().then(() => {
-          logger.add('event', "Spotify music resumed successfully");
-        }).catch((err: any) => {
-          logger.add('error', `Resume failed: ${err}`);
-        });
+        player.current.resume().catch((err: any) => logger.add('error', `Resume error: ${err}`));
       }
 
-      //removing the radio item that was played from the queue
-      const updatedRadioItems = [...radioItemsRef.current];
-      updatedRadioItems.shift();
-      radioItemsRef.current = updatedRadioItems;
+      const updatedRadioItems = radioItems.slice(1);
       setRadioItems(updatedRadioItems);
+      radioItemsRef.current = updatedRadioItems;
     } else {
-      logger.add('info', `No radio item matched for track: ${track.name} (pending radio items in ref: ${radioItemsRef.current.length})`);
+      logger.add('info', `No pending radio host announcement for: ${track.name}`);
     }
 
-    // Shift local queue item
-    const newQueue = [...queue];
-    newQueue.shift();
-    setQueue(newQueue);
-
-    // If local queue is getting low, re-fetch live queue from Spotify API
-    if (newQueue.length < 3) {
-      logger.add('info', "Local queue low - re-fetching live Spotify queue...");
-      getQueue();
-    }
-
-    // ready to fetch radio for the next track
     setFetchedNewRadioItems(true);
+  }
+
+  const getQueue = async () => {
+    logger.add('info', "Fetching user queue from Spotify API...");
+    const res = await getUserQueue();
+    if (!res || !res.queue || res.queue.length === 0 || !('album' in res.queue[0])) {
+      logger.add('warn', "Queue returned empty or non-music tracks from Spotify API");
+      return;
+    }
+
+    const uniqueTracks = res.queue.filter((track: Track, index: number, self: Track[]) =>
+      index === self.findIndex((t) => t.id === track.id)
+    );
+    logger.add('event', `Queue updated successfully: ${uniqueTracks.length} tracks loaded`);
+    setQueue(uniqueTracks);
+    setFetchedNewRadioItems(true);
+    return uniqueTracks;
   }
 
   const sdkPlayerStarted = async (player: any) => {
