@@ -6,6 +6,8 @@ import { Button } from '@chakra-ui/react';
 import {playOnSDK} from '../network/spotify';
 import "./style.css";
 
+import { logger } from '../components/DebugConsole';
+
 const track = {
     name: "",
     album: {
@@ -31,7 +33,7 @@ function WebPlayback(props) {
     const lowVolumeSound = useRef(null);
 
     const cleanup = () => {
-        console.log("Cleaning up WebPlayback player...");
+        logger.add('warn', "Cleanup triggered - disconnecting WebPlayback player");
         if (player.current){
             try {
                 player.current.removeListener("ready");
@@ -39,7 +41,7 @@ function WebPlayback(props) {
                 player.current.removeListener("player_state_changed");
                 player.current.disconnect();
             } catch (e) {
-                console.log("Cleanup error:", e);
+                logger.add('error', `Cleanup error: ${e}`);
             }
         }
     }
@@ -66,34 +68,37 @@ function WebPlayback(props) {
                 });
 
                 player.current.addListener('ready', ({ device_id }) => {
-                    console.log('Ready with Device ID', device_id);
+                    logger.add('event', `Player ready with Device ID: ${device_id}`);
                     setDeviceId(device_id);
                 });
 
                 player.current.addListener('not_ready', ({ device_id }) => {
-                    console.log('Device ID has gone offline', device_id);
+                    logger.add('warn', `Player gone offline (Device ID: ${device_id})`);
                 });
 
                 player.current.addListener('autoplay_failed', () => {
-                    console.warn('Autoplay is not allowed by the browser autoplay rules');
+                    logger.add('warn', "Autoplay failed by browser autoplay policy");
                 });
 
                 player.current.on('initialization_error', ({ message }) => {
-                    console.error('Failed to initialize', message);
+                    logger.add('error', `Initialization error: ${message}`);
                     initializePlayer();
                 });
 
                 player.current.on('authentication_error', ({ message }) => {
-                    console.error('Failed to authenticate', message);
+                    logger.add('error', `Authentication error: ${message}`);
                     initializePlayer();
                 });
 
                 addPlayerStateChangedListener();
 
-                player.current.connect().catch(e => console.error('Error connecting player', e));
-                window.addEventListener('beforeunload', () => cleanup());
+                player.current.connect().catch(e => logger.add('error', `Connect error: ${e}`));
+                window.addEventListener('beforeunload', () => {
+                    logger.add('warn', "beforeunload window event triggered");
+                    cleanup();
+                });
             } catch (e) {
-                console.log("Initialization error:", e);
+                logger.add('error', `Initialization Exception: ${e}`);
             }
         };
 
@@ -105,7 +110,7 @@ function WebPlayback(props) {
             document.body.appendChild(script);
 
             window.onSpotifyWebPlaybackSDKReady = () => {
-                console.log("onSpotifyWebPlaybackSDKReady");
+                logger.add('info', "onSpotifyWebPlaybackSDKReady event received");
                 initializePlayer();
             };
         } else {
@@ -120,9 +125,11 @@ function WebPlayback(props) {
     const addPlayerStateChangedListener = () => {
         player.current.addListener('player_state_changed', (state => {
             if (!state) {
+                logger.add('warn', "player_state_changed received null state");
                 return;
             }
             if (state.track_window.current_track.name !== current_track_name.current) {
+                logger.add('event', `Track changed to: ${state.track_window.current_track.name}`);
                 current_track_name.current = state.track_window.current_track.name;
                 props.onPlayerChange(state.track_window.current_track, player);
                 setCurrentTrack(state.track_window.current_track);
@@ -130,9 +137,12 @@ function WebPlayback(props) {
 
             player.current.getCurrentState().then(state => {
                 if (state && !playerStarted.current) {
+                    logger.add('event', "Player started playing active track");
                     setActive(true);
                     playerStarted.current = true;
                     props.sdkPlayerStarted(player);
+                } else if (!state) {
+                    logger.add('warn', "getCurrentState() returned null");
                 }
             });
 

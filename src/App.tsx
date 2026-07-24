@@ -8,6 +8,7 @@ import { SongCard } from './songCard';
 import { Track } from "@spotify/web-api-ts-sdk";
 import WebPlayback from './WebPlayback/WebPlayback';
 import { RadioItemCard } from './radioItemCard';
+import { DebugConsole } from './components/DebugConsole';
 
 
 
@@ -323,6 +324,7 @@ function App() {
         {render()}
       </div>
       {debugText && <div style={{ fontSize: '0.7rem', color: '#555', position: 'fixed', bottom: '10px', right: '10px' }}>{debugText}</div>}
+      <DebugConsole />
     </div>
   );
 }
