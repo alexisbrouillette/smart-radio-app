@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import './App.css';
 import { Button, Stack } from '@chakra-ui/react';
 import { currentToken, redirectToSpotifyAuthorize } from './spotifyTokenHandling';
-import { getToken, getUserQueue, generate_queue_texts, generate_queue_audio, getTokenFromrefreshToken } from './network/spotify';
+import { getToken, getUserQueue, generate_queue_texts, generate_queue_audio, getTokenFromrefreshToken, skipToNext } from './network/spotify';
 import { SongCard } from './songCard';
 
 import { Track } from "@spotify/web-api-ts-sdk";
@@ -262,6 +262,27 @@ function App() {
     setFetchedNewRadioItems(true);
   }
 
+  const triggerRadioHostAndSkip = async () => {
+    if (radioItemsRef.current.length > 0) {
+      const activeRadioItem = radioItemsRef.current[0];
+      logger.add('info', `Playing end-of-song radio host announcement: "${activeRadioItem.text}"`);
+      
+      const contentToPlay = (activeRadioItem.audio && activeRadioItem.audio !== 'empty') 
+        ? activeRadioItem.audio 
+        : activeRadioItem.text;
+
+      await playSound(contentToPlay);
+
+      const updatedRadioItems = radioItemsRef.current.slice(1);
+      setRadioItems(updatedRadioItems);
+      radioItemsRef.current = updatedRadioItems;
+    }
+    
+    logger.add('info', "Host speech finished! Skipping to next song...");
+    await skipToNext();
+    setFetchedNewRadioItems(true);
+  }
+
   const getQueue = async () => {
     logger.add('info', "Fetching user queue from Spotify API...");
     const res = await getUserQueue();
@@ -347,6 +368,7 @@ function App() {
             radioItems={radioItems}
             onPlayerChange={onPlayerChange}
             sdkPlayerStarted={sdkPlayerStarted}
+            triggerRadioHostAndSkip={triggerRadioHostAndSkip}
             queue={queue}
           />
           {queue.length > 0 && (

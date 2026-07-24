@@ -113,12 +113,17 @@ function WebPlayback(props) {
                         console.log(msg);
                         logger.add('info', msg);
                         
-                        transitionTimerRef.current = setTimeout(() => {
-                            const fireMsg = `Precision track end timer fired for "${data.item.name}"! Skipping to next track...`;
+                        transitionTimerRef.current = setTimeout(async () => {
+                            const fireMsg = `Precision track end timer fired for "${data.item.name}"! Pausing and playing radio host speech...`;
                             console.log(fireMsg);
                             logger.add('event', fireMsg);
-                            skipToNext();
-                        }, Math.max(0, remainingMs - 150));
+                            await pausePlayback();
+                            if (props.triggerRadioHostAndSkip) {
+                                await props.triggerRadioHostAndSkip();
+                            } else {
+                                await skipToNext();
+                            }
+                        }, Math.max(0, remainingMs - 300));
                     }
                 } else {
                     console.log(`Poll tick: is_playing=${data.is_playing}, progress=${data.progress_ms}, duration=${data.item?.duration_ms}, pendingRadioItems=${props.radioItems?.length}`);
