@@ -256,12 +256,18 @@ function App() {
       logger.add('info', `No radio item matched for track: ${track.name} (pending radio items: ${radioItems.length})`);
     }
 
-    //removing the track that was played from the queue
+    // Shift local queue item
     const newQueue = [...queue];
     newQueue.shift();
     setQueue(newQueue);
 
-    //ready to fetch radio for the next track
+    // If local queue is getting low, re-fetch live queue from Spotify API
+    if (newQueue.length < 3) {
+      logger.add('info', "Local queue low - re-fetching live Spotify queue...");
+      getQueue();
+    }
+
+    // ready to fetch radio for the next track
     setFetchedNewRadioItems(true);
   }
 
