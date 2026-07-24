@@ -131,28 +131,37 @@ function App() {
 
 
   useEffect(() => {
-    //previousRadioItems.current = radioItems;
-    
     if(fetchedNewRadioItems) {
       setFetchedNewRadioItems(false);
-      //check if there is a radio item to fetch (don't fetch if it is associated with the last track)
-      const nextTrackToFetchRadio = queue.findIndex((track) => track.id === radioItems[radioItems.length - 1].beforeTrackId);
-      if(nextTrackToFetchRadio !== queue.length - 1){
-        
-       
-        //we already generated audio for the beforeTrack so we need to add 1 to the index
-        if (nextTrackToFetchRadio > -1 && nextTrackToFetchRadio < queue.length-1) {
-          const newFetchingRadioFor = [queue[nextTrackToFetchRadio+1]];
-          //usually give 2 tracks per request but if it's the last track, only give 1
-          if(nextTrackToFetchRadio < queue.length - 2) {
-            newFetchingRadioFor.push(queue[nextTrackToFetchRadio + 2]);
+      
+      if (queue.length === 0) {
+        logger.add('warn', "Queue is empty - cannot generate radio items yet");
+        return;
+      }
+
+      let newFetchingRadioFor: Track[] = [];
+
+      if (radioItems.length === 0) {
+        // Initial load: fetch radio text for the first 2 tracks in queue
+        logger.add('event', `Initial radio text generation for: ${queue[0]?.name}`);
+        newFetchingRadioFor = queue.slice(0, Math.min(2, queue.length));
+      } else {
+        const lastRadioItem = radioItems[radioItems.length - 1];
+        const lastIndex = queue.findIndex((track) => track.id === lastRadioItem.beforeTrackId);
+        if (lastIndex > -1 && lastIndex < queue.length - 1) {
+          logger.add('event', `Generating next radio text for: ${queue[lastIndex + 1]?.name}`);
+          newFetchingRadioFor = [queue[lastIndex + 1]];
+          if (lastIndex < queue.length - 2) {
+            newFetchingRadioFor.push(queue[lastIndex + 2]);
           }
-          setFetchingRadioFor(newFetchingRadioFor);
         }
       }
 
+      if (newFetchingRadioFor.length > 0) {
+        setFetchingRadioFor(newFetchingRadioFor);
+      }
     }
-  }, [fetchedNewRadioItems]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchedNewRadioItems, queue]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (trackChanged.current) {
@@ -180,15 +189,20 @@ function App() {
   }
 
   const getQueue = async () => {
+    logger.add('info', "Fetching user queue from Spotify API...");
     const res = await getUserQueue();
-    //checking if it returned a track or an episode(episode don't have an album)
-    if (res === undefined || !('album' in res.queue[0])) return;
+    if (!res || !res.queue || res.queue.length === 0 || !('album' in res.queue[0])) {
+      logger.add('warn', "Queue returned empty or non-music tracks from Spotify API");
+      return;
+    }
 
     // removes duplicates
     const uniqueTracks = res.queue.filter((track: Track, index: number, self: Track[]) =>
       index === self.findIndex((t) => t.id === track.id)
     );
+    logger.add('event', `Queue updated successfully: ${uniqueTracks.length} tracks loaded`);
     setQueue(uniqueTracks);
+    setFetchedNewRadioItems(true);
     return uniqueTracks;
   }
 
