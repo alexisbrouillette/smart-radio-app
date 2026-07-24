@@ -195,7 +195,11 @@ function WebPlayback(props) {
                 logger.add('warn', "player_state_changed received null state");
                 return;
             }
-            if (state.track_window.current_track.name !== current_track_name.current) {
+            
+            const isNewTrack = state.track_window.current_track.name !== current_track_name.current;
+            logger.add('info', `State: ${state.track_window.current_track.name} (paused: ${state.paused}, pos: ${Math.round(state.position/1000)}s)`);
+
+            if (isNewTrack) {
                 logger.add('event', `Track changed to: ${state.track_window.current_track.name}`);
                 current_track_name.current = state.track_window.current_track.name;
                 props.onPlayerChange(state.track_window.current_track, player);

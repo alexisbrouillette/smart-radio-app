@@ -8,7 +8,7 @@ import { SongCard } from './songCard';
 import { Track } from "@spotify/web-api-ts-sdk";
 import WebPlayback from './WebPlayback/WebPlayback';
 import { RadioItemCard } from './radioItemCard';
-import { DebugConsole } from './components/DebugConsole';
+import { DebugConsole, logger } from './components/DebugConsole';
 
 
 
@@ -39,14 +39,14 @@ function App() {
   const [debugText, setDebugText] = useState<string>("");
 
   const playSound = async (b64Audio: string) => {
-    //const audioTune = new Audio('./valid1.wav');
+    logger.add('event', "Playing TTS Audio...");
     const audioTune = new Audio(`data:audio/wav;base64,${b64Audio}`);
-    await audioTune.play();
+    await audioTune.play().catch(err => logger.add('error', `Audio play error: ${err}`));
     return new Promise((resolve) => {
       setTimeout(() => {
         resolve(null);
-        console.log("played valid1")
-      }, audioTune.duration * 1000);
+        logger.add('info', "Finished playing TTS Audio");
+      }, (audioTune.duration || 3) * 1000);
     });
   }
   useEffect(() => {
@@ -211,35 +211,49 @@ function App() {
     }
     return null;
   }
+
   const pauseSong = async (player:any) => {
     try {
       if (player.current) {
+        logger.add('info', "Pausing Spotify track for radio host transition...");
         await player.current.pause();
       }
     } catch (e) {
-      console.log("Pause error:", e);
+      logger.add('error', `Pause error: ${e}`);
     }
     return null;
   }
 
   //this fn is called ONLY when the track is changed
   const onPlayerChange = async (track: Track, player: any) => {
+    logger.add('event', `onPlayerChange triggered for: ${track.name} (id: ${track.id})`);
+    
     if(radioItems.length > 0 && track.id === radioItems[0].beforeTrackId){
+      logger.add('info', `Matched radio item for beforeTrackId: ${track.id}`);
       await pauseSong(player);
       
       if(radioItems[0].audio !== null && radioItems[0].audio !== 'empty'){
         await playSound(radioItems[0].audio);
+      } else {
+        logger.add('warn', "Radio item audio was empty/null - skipping audio play");
       }
       
       // Always resume music playback so Spotify session never gets stuck paused
       if (player.current) {
-        player.current.resume().catch(() => {});
+        logger.add('info', "Resuming Spotify music playback...");
+        player.current.resume().then(() => {
+          logger.add('event', "Spotify music resumed successfully");
+        }).catch((err: any) => {
+          logger.add('error', `Resume failed: ${err}`);
+        });
       }
 
       //removing the radio item that was played from the queue
       radioItems.shift();
       setRadioItems(radioItems);
       radioItemsRef.current = radioItems;
+    } else {
+      logger.add('info', `No radio item matched for track: ${track.name} (pending radio items: ${radioItems.length})`);
     }
 
     //removing the track that was played from the queue
