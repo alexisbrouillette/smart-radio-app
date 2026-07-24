@@ -23,7 +23,7 @@ function App() {
   const [queue, setQueue] = useState<Track []>([]);
 
   const [fetchedNewRadioItems, setFetchedNewRadioItems] = useState<boolean>(false);
-  const trackChanged = useRef(false);
+  const trackChanged = useRef(false); // eslint-disable-line @typescript-eslint/no-unused-vars
   const [fetchingRadioFor, setFetchingRadioFor] = useState<Track[]>([]);
   const [, setGotToken] = useState<boolean>(false);
 
@@ -275,6 +275,28 @@ function App() {
 
     if (newQueue === undefined) return;
     setFetchingRadioFor([newQueue[0], newQueue[1]]);//for the first two tracks
+  }
+
+  const renderQueue = () => {
+    if (queue.length > 0) {
+      const renderList: (RadioItem | Track)[] = [...queue];
+      for (let i = 0; i < radioItems.length; i++) {
+        const radioItem = radioItems[i];
+        const index = renderList.findIndex((item) => 'name' in item && item.id === radioItem.beforeTrackId);
+        renderList.splice(index, 0, radioItem);
+      }
+      return renderList.map((elem) => {
+        if ('album' in elem)
+          return <SongCard song={elem} key={elem.id} />;
+        else
+          return <RadioItemCard radioItem={elem} key={elem.beforeTrackId+"radio"} />;
+      });
+    }
+    return null;
+  }
+
+  const connectToSpotify = async () => {
+    redirectToSpotifyAuthorize();
   }
 
   const render = () => {
