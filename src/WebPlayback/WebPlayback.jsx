@@ -114,10 +114,10 @@ function WebPlayback(props) {
                         logger.add('info', msg);
                         
                         transitionTimerRef.current = setTimeout(() => {
-                            const fireMsg = `Precision track end timer fired for "${data.item.name}"! Pausing playback...`;
+                            const fireMsg = `Precision track end timer fired for "${data.item.name}"! Skipping to next track...`;
                             console.log(fireMsg);
                             logger.add('event', fireMsg);
-                            pausePlayback();
+                            skipToNext();
                         }, Math.max(0, remainingMs - 150));
                     }
                 } else {
