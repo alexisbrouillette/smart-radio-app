@@ -1,6 +1,6 @@
 {
-  "short_name": "Stan.me",
-  "name": "Stan in da pocket",
+  "short_name": "SmartRadio",
+  "name": "Smart Radio - AI Host",
   "icons": [
     {
       "src": "favicon.ico",
@@ -18,8 +18,9 @@
       "sizes": "512x512"
     }
   ],
-  "start_url": ".",
+  "start_url": "/",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#000000"
+  "orientation": "portrait",
+  "theme_color": "#080710",
+  "background_color": "#080710"
 }
