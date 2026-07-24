@@ -179,12 +179,12 @@ function App() {
 
       let newFetchingRadioFor: Track[] = [];
 
-      if (radioItems.length === 0) {
+      if (radioItemsRef.current.length === 0) {
         // Initial load: fetch radio text for the first 2 tracks in queue
         logger.add('event', `Initial radio text generation for: ${queue[0]?.name}`);
         newFetchingRadioFor = queue.slice(0, Math.min(2, queue.length));
       } else {
-        const lastRadioItem = radioItems[radioItems.length - 1];
+        const lastRadioItem = radioItemsRef.current[radioItemsRef.current.length - 1];
         const lastIndex = queue.findIndex((track) => track.id === lastRadioItem.beforeTrackId);
         if (lastIndex > -1 && lastIndex < queue.length - 1) {
           logger.add('event', `Generating next radio text for: ${queue[lastIndex + 1]?.name}`);
@@ -278,11 +278,11 @@ function App() {
 
   //this fn is called ONLY when the track is changed
   const onPlayerChange = async (track: Track, player: any) => {
-    logger.add('event', `onPlayerChange triggered for: ${track.name} (id: ${track.id})`);
+    logger.add('event', `onPlayerChange triggered for: ${track.name} (id: ${track.id}) [pending radio items in ref: ${radioItemsRef.current.length}]`);
     
-    if (radioItems.length > 0) {
-      const activeRadioItem = radioItems[0];
-      logger.add('info', `Matched radio item text: "${activeRadioItem.text}"`);
+    if (radioItemsRef.current.length > 0) {
+      const activeRadioItem = radioItemsRef.current[0];
+      logger.add('info', `Matched radio item text: "${activeRadioItem.text}" (has audio: ${!!activeRadioItem.audio && activeRadioItem.audio !== 'empty'})`);
       await pauseSong(player);
       
       const contentToPlay = (activeRadioItem.audio && activeRadioItem.audio !== 'empty') 
@@ -302,11 +302,12 @@ function App() {
       }
 
       //removing the radio item that was played from the queue
-      radioItems.shift();
-      setRadioItems(radioItems);
-      radioItemsRef.current = radioItems;
+      const updatedRadioItems = [...radioItemsRef.current];
+      updatedRadioItems.shift();
+      radioItemsRef.current = updatedRadioItems;
+      setRadioItems(updatedRadioItems);
     } else {
-      logger.add('info', `No radio item matched for track: ${track.name} (pending radio items: ${radioItems.length})`);
+      logger.add('info', `No radio item matched for track: ${track.name} (pending radio items in ref: ${radioItemsRef.current.length})`);
     }
 
     // Shift local queue item
