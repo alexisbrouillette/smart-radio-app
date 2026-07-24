@@ -96,9 +96,21 @@ function App() {
       }
       //else refresh the token
       else {
-        const res = await getTokenFromrefreshToken();
-        currentToken.save(res);
-        setGotToken(true);
+        try {
+          const res = await getTokenFromrefreshToken();
+          if (res && res.access_token) {
+            currentToken.save(res);
+            setGotToken(true);
+          } else if (currentToken.access_token) {
+            setGotToken(true);
+          } else {
+            logger.add('warn', "Spotify token expired - redirecting to Spotify Login...");
+            redirectToSpotifyAuthorize();
+          }
+        } catch (e) {
+          logger.add('warn', "Spotify token refresh error - redirecting to Spotify Login...");
+          redirectToSpotifyAuthorize();
+        }
       }
 
     }
