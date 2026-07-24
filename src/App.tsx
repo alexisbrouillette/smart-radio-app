@@ -263,13 +263,29 @@ function App() {
     try{
       if (currentToken.access_token === null || currentToken.access_token === "" || currentToken.access_token === 'undefined') {
         return (
-          <div>
-            <Button colorScheme='blue' onClick={()=> connectToSpotify()}>Connect to spotify!</Button>
+          <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', padding: '40px 20px' }}>
+            <span style={{ fontSize: '3rem' }}>📻</span>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'white', margin: 0 }}>Smart Radio</h2>
+            <p style={{ color: '#a7a7a7', fontSize: '0.9rem', maxWidth: '300px', margin: '0 auto', textAlign: 'center', lineHeight: '1.5' }}>
+              Connect your Spotify Premium account to hear your personalized AI radio host.
+            </p>
+            <Button 
+              backgroundColor="#1DB954" 
+              color="black"
+              borderRadius="full"
+              _hover={{ backgroundColor: '#1ed760', transform: 'scale(1.03)' }}
+              _active={{ transform: 'scale(0.98)' }}
+              fontWeight="800"
+              size="lg"
+              px="8"
+              onClick={()=> connectToSpotify()}>
+              Connect to Spotify
+            </Button>
           </div>
         );
       }
       return (
-        <div >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {/* {queue.length == 0  ? <Button colorScheme='blue' onClick={() => startRadio()}>Start!</Button> : null} */}
           <WebPlayback 
             token={currentToken.access_token} 
@@ -278,9 +294,16 @@ function App() {
             queue={queue}
             radioItems={radioItems}
           />
-          <Stack direction='column' spacing={4}>
-            {renderQueue()}
-          </Stack>
+          {queue.length > 0 && (
+            <div>
+              <div className="section-title">
+                <span>🎵</span> Up Next
+              </div>
+              <Stack direction='column' spacing={3}>
+                {renderQueue()}
+              </Stack>
+            </div>
+          )}
         </div>
       );
     }
@@ -294,12 +317,12 @@ function App() {
   return (
     <div className="App">
       <header className="App-header">
-        Smart radio
+        📻 <span className="App-logo-text">Smart Radio</span>
       </header>
-      <h1 style={{ color: 'red' }}>{debugText}</h1>
       <div className='Content'>
         {render()}
       </div>
+      {debugText && <div style={{ fontSize: '0.7rem', color: '#555', position: 'fixed', bottom: '10px', right: '10px' }}>{debugText}</div>}
     </div>
   );
 }
