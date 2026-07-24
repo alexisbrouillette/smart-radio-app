@@ -111,11 +111,16 @@ function WebPlayback(props) {
                 player.current.on('authentication_error', async ({ message }) => {
                     logger.add('error', `Authentication error: ${message}. Refreshing token...`);
                     try {
+                        if (player.current) {
+                            try { player.current.disconnect(); } catch (err) {}
+                        }
                         const res = await getTokenFromrefreshToken();
                         if (res && res.access_token) {
                             currentToken.save(res);
                             logger.add('event', "Token refreshed successfully. Reconnecting player...");
                             initializePlayer();
+                        } else {
+                            logger.add('error', "Token refresh returned no access token");
                         }
                     } catch (e) {
                         logger.add('error', `Token refresh failed: ${e}`);

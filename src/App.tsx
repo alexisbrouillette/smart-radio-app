@@ -212,32 +212,34 @@ function App() {
     return null;
   }
   const pauseSong = async (player:any) => {
-    let state = await player.current.getCurrentState();
-    while(state.paused === false){
-      player.current.pause();
-      state = await player.current.getCurrentState();
+    try {
+      if (player.current) {
+        await player.current.pause();
+      }
+    } catch (e) {
+      console.log("Pause error:", e);
     }
     return null;
   }
 
-  //a dumb way to do it. but could not pause because of the loading state of the track -.-
   //this fn is called ONLY when the track is changed
   const onPlayerChange = async (track: Track, player: any) => {
-    //since its only called when the track is changed, we can fetch new radio items here
-
     if(radioItems.length > 0 && track.id === radioItems[0].beforeTrackId){
-      pauseSong(player);
+      await pauseSong(player);
       
       if(radioItems[0].audio !== null && radioItems[0].audio !== 'empty'){
         await playSound(radioItems[0].audio);
-        player.current.resume();
       }
+      
+      // Always resume music playback so Spotify session never gets stuck paused
+      if (player.current) {
+        player.current.resume().catch(() => {});
+      }
+
       //removing the radio item that was played from the queue
       radioItems.shift();
       setRadioItems(radioItems);
       radioItemsRef.current = radioItems;
-
-      
     }
 
     //removing the track that was played from the queue
