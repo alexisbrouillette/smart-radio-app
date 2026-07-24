@@ -145,7 +145,7 @@ export async function generate_queue_texts(queue: Track[]) {
 export async function generate_queue_audio(text: string): Promise<string | null> {
   //console.log("GENERATING AUDIO")
   try {
-    const response = await fetch(`${process.env.REACT_APP_HUGGING_FACE_URL}/get_radio_audio`, {
+    const response = await fetch(`${process.env.REACT_APP_SERVER_ADRESS}/get_radio_audio`, {
       method: 'POST',
       mode: 'cors',
       cache: 'no-cache',
