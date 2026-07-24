@@ -31,14 +31,17 @@ function WebPlayback(props) {
     const lowVolumeSound = useRef(null);
 
     const cleanup = () => {
-        alert("cleanup");
-        if (player){
-            player.removeListener("ready");
-            player.removeListener("not_ready");
-            player.removeListener("player_state_changed");
-            player.disconnect();
+        console.log("Cleaning up WebPlayback player...");
+        if (player.current){
+            try {
+                player.current.removeListener("ready");
+                player.current.removeListener("not_ready");
+                player.current.removeListener("player_state_changed");
+                player.current.disconnect();
+            } catch (e) {
+                console.log("Cleanup error:", e);
+            }
         }
-            
     }
 
     const webPlayerLoaded = () => {
@@ -72,7 +75,7 @@ function WebPlayback(props) {
                 });
 
                 player.current.addListener('autoplay_failed', () => {
-                    alert('Autoplay is not allowed by the browser autoplay rules');
+                    console.warn('Autoplay is not allowed by the browser autoplay rules');
                 });
 
                 player.current.on('initialization_error', ({ message }) => {
@@ -87,11 +90,10 @@ function WebPlayback(props) {
 
                 addPlayerStateChangedListener();
 
-                player.current.connect().catch(e => console.error('I suck'));
+                player.current.connect().catch(e => console.error('Error connecting player', e));
                 window.addEventListener('beforeunload', () => cleanup());
             } catch (e) {
-                console.log("im sad");
-                console.log(e);
+                console.log("Initialization error:", e);
             }
         };
 
@@ -127,15 +129,11 @@ function WebPlayback(props) {
             }
 
             player.current.getCurrentState().then(state => {
-                if (!state)
-                    setActive(false);
-                else if (!playerStarted.current) {
+                if (state && !playerStarted.current) {
                     setActive(true);
                     playerStarted.current = true;
                     props.sdkPlayerStarted(player);
                 }
-                //(!state) ? setActive(false) : setActive(true);
-
             });
 
         }));
@@ -143,16 +141,23 @@ function WebPlayback(props) {
 
     const initializeAudioContext = () => {
         if (!audioContext.current) {
-            audioContext.current = new (window.AudioContext || window.webkitAudioContext)();
-            const oscillator = audioContext.current.createOscillator();
-            const gainNode = audioContext.current.createGain();
-            oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(440, audioContext.current.currentTime);
-            gainNode.gain.setValueAtTime(0.001, audioContext.current.currentTime);
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.current.destination);
-            oscillator.start();
-            lowVolumeSound.current = oscillator;
+            try {
+                audioContext.current = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.current.createOscillator();
+                const gainNode = audioContext.current.createGain();
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(440, audioContext.current.currentTime);
+                gainNode.gain.setValueAtTime(0.001, audioContext.current.currentTime);
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.current.destination);
+                oscillator.start();
+                lowVolumeSound.current = oscillator;
+            } catch (e) {
+                console.error("AudioContext initialization error:", e);
+            }
+        }
+        if (audioContext.current && audioContext.current.state === 'suspended') {
+            audioContext.current.resume().catch(() => {});
         }
     }
 
