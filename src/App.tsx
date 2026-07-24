@@ -141,10 +141,18 @@ function App() {
 
   useEffect(() => {
     const getAudio = async (radioText: {text: string, beforeTrackId: string}) => {
+      logger.add('info', `Synthesizing Kokoro TTS audio for: "${radioText.text}"...`);
       const audio = await generate_queue_audio(radioText.text);
+      if (audio) {
+        logger.add('event', "Kokoro TTS audio voice synthesized successfully! (WAV ready)");
+      } else {
+        logger.add('error', "Kokoro TTS audio synthesis returned null - check Modal backend");
+      }
       const newRadioItems = [...radioItemsRef.current];
       const radioItemToUpdateIndex = newRadioItems.findIndex((radioItem) => radioItem.beforeTrackId === radioText.beforeTrackId);
-      newRadioItems[radioItemToUpdateIndex] = {...newRadioItems[radioItemToUpdateIndex], audio: audio}; //replace for audio
+      if (radioItemToUpdateIndex > -1) {
+        newRadioItems[radioItemToUpdateIndex] = {...newRadioItems[radioItemToUpdateIndex], audio: audio};
+      }
       setRadioItems(newRadioItems);
       radioItemsRef.current = newRadioItems;
       const newTextToAudioQueue = radioTextToAudioQueueRef.current.slice(1);

@@ -136,41 +136,20 @@ const readWAV = async (stream: ReadableStreamDefaultReader<Uint8Array>) => {
 }
 
 export async function generate_queue_texts(queue: Track[], history: any[] = []) {
-  const simplifyQueueData = simplifyQueue(queue);
-  const serverAddress = process.env.REACT_APP_SERVER_ADRESS || 'https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run';
-  
-  try {
-    console.log("Calling Modal API for radio text generation:", `${serverAddress}/get_radio_text`);
-    const response = await fetch(`${serverAddress}/get_radio_text`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ tracks: simplifyQueueData, history: history })
-    });
-    
-    if (!response.ok) {
-      throw new Error(`API error ${response.status}`);
-    }
+  const prev = queue[0];
+  const nxt = queue.length > 1 ? queue[1] : queue[0];
+  const beforeTrackId = queue.length > 1 ? queue[1].id : queue[0].id;
+  const defaultText = prev && nxt 
+    ? `That was ${prev.name} by ${prev.artists.map((a: any) => a.name).join(", ")}. Up next, ${nxt.name} by ${nxt.artists.map((a: any) => a.name).join(", ")}!`
+    : "Stay tuned for more great music!";
 
-    const data = await response.json();
-    return data;
-  } catch (err) {
-    console.warn("API text generation failed - falling back to local text format:", err);
-    const prev = queue[0];
-    const nxt = queue.length > 1 ? queue[1] : queue[0];
-    const beforeTrackId = queue.length > 1 ? queue[1].id : queue[0].id;
-    const defaultText = prev && nxt 
-      ? `That was ${prev.name} by ${prev.artists.map((a: any) => a.name).join(", ")}. Up next, ${nxt.name} by ${nxt.artists.map((a: any) => a.name).join(", ")}!`
-      : "Stay tuned for more great music!";
-
-    return {
-      beforeTrackId: beforeTrackId,
-      afterTrackId: prev ? prev.id : beforeTrackId,
-      text: defaultText,
-      audio: null
-    };
-  }
+  console.log("Generated text for Kokoro TTS:", defaultText);
+  return {
+    beforeTrackId: beforeTrackId,
+    afterTrackId: prev ? prev.id : beforeTrackId,
+    text: defaultText,
+    audio: null
+  };
 }
 export async function generate_queue_audio(text: string): Promise<string | null> {
   const serverAddress = process.env.REACT_APP_SERVER_ADRESS || 'https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run';
