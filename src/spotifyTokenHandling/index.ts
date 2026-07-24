@@ -46,13 +46,19 @@ export  const currentToken = {
     get expires() { return localStorage.getItem('expires') || null },
   
     save: function (response:any) {
+      if (!response || response.error) return;
       const { access_token, refresh_token, expires_in } = response;
-      localStorage.setItem('access_token', access_token);
-      localStorage.setItem('refresh_token', refresh_token);
-      localStorage.setItem('expires_in', expires_in);
-  
-      const now = new Date();
-      const expiry = new Date(now.getTime() + (expires_in * 1000)).toDateString();
-      localStorage.setItem('expires', expiry);
+      if (access_token) {
+        localStorage.setItem('access_token', access_token);
+      }
+      if (refresh_token && refresh_token !== 'undefined' && refresh_token !== 'null') {
+        localStorage.setItem('refresh_token', refresh_token);
+      }
+      if (expires_in) {
+        localStorage.setItem('expires_in', expires_in.toString());
+        const now = new Date();
+        const expiry = new Date(now.getTime() + (expires_in * 1000)).getTime();
+        localStorage.setItem('expires', expiry.toString());
+      }
     }
   };

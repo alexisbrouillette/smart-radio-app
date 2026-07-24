@@ -77,27 +77,41 @@ export async function getToken(code:any) {
 }
 
 export const getTokenFromrefreshToken = async () => {
-
-  // refresh token that has been previously stored
   const refreshToken = localStorage.getItem('refresh_token');
+  if (!refreshToken || refreshToken === 'undefined' || refreshToken === 'null') {
+    console.error('No valid refresh token in storage');
+    return null;
+  }
+
   const url = "https://accounts.spotify.com/api/token";
+  const payload = {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: clientId
+    }),
+  };
 
-   const payload = {
-     method: 'POST',
-     headers: {
-       'Content-Type': 'application/x-www-form-urlencoded'
-     },
-     body: new URLSearchParams({
-       grant_type: 'refresh_token',
-       refresh_token: refreshToken ?? '',
-       client_id: clientId
-     }),
-   }
-   const body = await fetch(url, payload);
-   const response = await body.json();
+  try {
+    const body = await fetch(url, payload);
+    const response = await body.json();
 
-   return response;
- }
+    if (response.error) {
+      console.error('Spotify token refresh error:', response);
+      return null;
+    }
+
+    currentToken.save(response);
+    return response;
+  } catch (err) {
+    console.error('Failed to fetch Spotify token refresh:', err);
+    return null;
+  }
+}
 
 const concatUint8Arrays = (a: Uint8Array, b: Uint8Array) => {
   const res = new Uint8Array(a.length + b.length);
