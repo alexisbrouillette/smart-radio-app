@@ -1,16 +1,16 @@
-import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import './App.css';
-import { Alert, AlertDescription, AlertIcon, AlertTitle, Button, Card, CardBody, CircularProgress, Heading, Skeleton, Stack, Text } from '@chakra-ui/react';
+import { Button, Stack } from '@chakra-ui/react';
 import { currentToken, redirectToSpotifyAuthorize } from './spotifyTokenHandling';
-import { getToken, getUserQueue, playOnSDK, generate_queue_texts, generate_queue_audio, getTokenFromrefreshToken } from './network/spotify';
+import { getToken, getUserQueue, generate_queue_texts, generate_queue_audio, getTokenFromrefreshToken } from './network/spotify';
 import { SongCard } from './songCard';
 
-import { SpotifyApi, Track } from "@spotify/web-api-ts-sdk";
+import { Track } from "@spotify/web-api-ts-sdk";
 import WebPlayback from './WebPlayback/WebPlayback';
 import { RadioItemCard } from './radioItemCard';
 
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export interface RadioItem {
   text: string;
   beforeTrackId: string;
@@ -24,7 +24,7 @@ function App() {
   const [fetchedNewRadioItems, setFetchedNewRadioItems] = useState<boolean>(false);
   const trackChanged = useRef(false);
   const [fetchingRadioFor, setFetchingRadioFor] = useState<Track[]>([]);
-  const [gotToken, setGotToken] = useState<boolean>(false);
+  const [, setGotToken] = useState<boolean>(false);
 
   //this is not sexy but i need to acces it in the useEffect fo fetch the audio and the state is not up to date so i used ref too.. but i need
   // the rerenders of the state sooo.. yeah
@@ -92,13 +92,13 @@ function App() {
     if (fetchingRadioFor.length > 0) {
       getRadioTexts(fetchingRadioFor);
     }
-  }, [fetchingRadioFor]);
+  }, [fetchingRadioFor]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const getAudio = async (radioText: {text: string, beforeTrackId: string}) => {
       const audio = await generate_queue_audio(radioText.text);
       const newRadioItems = [...radioItemsRef.current];
-      const radioItemToUpdateIndex = newRadioItems.findIndex((radioItem) => radioItem.beforeTrackId == radioText.beforeTrackId);
+      const radioItemToUpdateIndex = newRadioItems.findIndex((radioItem) => radioItem.beforeTrackId === radioText.beforeTrackId);
       newRadioItems[radioItemToUpdateIndex] = {...newRadioItems[radioItemToUpdateIndex], audio: audio}; //replace for audio
       setRadioItems(newRadioItems);
       radioItemsRef.current = newRadioItems;
@@ -121,8 +121,8 @@ function App() {
     if(fetchedNewRadioItems) {
       setFetchedNewRadioItems(false);
       //check if there is a radio item to fetch (don't fetch if it is associated with the last track)
-      const nextTrackToFetchRadio = queue.findIndex((track) => track.id == radioItems[radioItems.length - 1].beforeTrackId);
-      if(nextTrackToFetchRadio != queue.length -1){
+      const nextTrackToFetchRadio = queue.findIndex((track) => track.id === radioItems[radioItems.length - 1].beforeTrackId);
+      if(nextTrackToFetchRadio !== queue.length - 1){
         
        
         //we already generated audio for the beforeTrack so we need to add 1 to the index
@@ -137,13 +137,13 @@ function App() {
       }
 
     }
-  }, [fetchedNewRadioItems]);
+  }, [fetchedNewRadioItems]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (trackChanged.current) {
       trackChanged.current = false;
     }
-  }, [trackChanged.current]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
 
   const connectToSpotify = async () => {
@@ -198,7 +198,7 @@ function App() {
   }
   const pauseSong = async (player:any) => {
     let state = await player.current.getCurrentState();
-    while(state.paused == false){
+    while(state.paused === false){
       player.current.pause();
       state = await player.current.getCurrentState();
     }
