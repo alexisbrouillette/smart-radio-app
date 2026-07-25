@@ -26,8 +26,7 @@ function WebPlayback(props) {
     const [is_active, setActive] = useState(false);
     const [current_track, setCurrentTrack] = useState(defaultTrack);
     const current_track_name = useRef("");
-    const audioContext = useRef(null);
-    const lowVolumeSound = useRef(null);
+
 
     const requestWakeLock = async () => {
         try {
@@ -40,41 +39,51 @@ function WebPlayback(props) {
         }
     };
 
-    const initializeAudioContext = () => {
-        if (!audioContext.current) {
+    const silentAudioRef = useRef(null);
+
+    const initializeAudioContext = async () => {
+        if (!silentAudioRef.current) {
             try {
-                audioContext.current = new (window.AudioContext || window.webkitAudioContext)();
-                const oscillator = audioContext.current.createOscillator();
-                const gainNode = audioContext.current.createGain();
-                oscillator.type = 'sine';
-                oscillator.frequency.setValueAtTime(440, audioContext.current.currentTime);
-                gainNode.gain.setValueAtTime(0.0001, audioContext.current.currentTime);
-                oscillator.connect(gainNode);
-                gainNode.connect(audioContext.current.destination);
-                oscillator.start();
-                lowVolumeSound.current = oscillator;
+                // 44.1kHz silent WAV audio base64 payload to satisfy mobile OS Media Session Keep-Alive rules
+                const silentWav = "data:audio/wav;base64,UklGRjIAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQ8AAACAgICAgICAgICAgICA";
+                const audio = new Audio(silentWav);
+                audio.loop = true;
+                audio.volume = 0.01;
+                silentAudioRef.current = audio;
+
+                const startSilentAudio = async () => {
+                    try {
+                        await audio.play();
+                        logger.add('info', "HTML5 Silent Audio Keep-Alive active (Screen-off exemption granted)");
+                        if ('mediaSession' in navigator) {
+                            navigator.mediaSession.playbackState = 'playing';
+                        }
+                    } catch (e) {}
+                };
+
+                startSilentAudio();
+
+                window.addEventListener('click', startSilentAudio, { once: true });
+                window.addEventListener('touchstart', startSilentAudio, { once: true });
             } catch (e) {
-                console.error("AudioContext initialization error:", e);
+                console.error("Silent audio initialization error:", e);
             }
-        }
-        if (audioContext.current && audioContext.current.state === 'suspended') {
-            const resumeAudio = () => {
-                if (audioContext.current && audioContext.current.state === 'suspended') {
-                    audioContext.current.resume().catch(() => {});
-                }
-                window.removeEventListener('click', resumeAudio);
-                window.removeEventListener('touchstart', resumeAudio);
-            };
-            window.addEventListener('click', resumeAudio, { once: true });
-            window.addEventListener('touchstart', resumeAudio, { once: true });
         }
 
         if ('mediaSession' in navigator) {
             navigator.mediaSession.metadata = new window.MediaMetadata({
                 title: "Smart Radio Host",
                 artist: "AI Radio Host",
-                album: "Live Station Broadcast"
+                album: "Live Broadcast Station"
             });
+            try {
+                navigator.mediaSession.setActionHandler('play', () => {
+                    if (silentAudioRef.current) silentAudioRef.current.play();
+                });
+                navigator.mediaSession.setActionHandler('pause', () => {
+                    if (silentAudioRef.current) silentAudioRef.current.pause();
+                });
+            } catch (e) {}
         }
         requestWakeLock();
     }
