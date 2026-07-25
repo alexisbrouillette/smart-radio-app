@@ -1,9 +1,6 @@
 import React, { useRef } from 'react';
-import SkipNextIcon from '@mui/icons-material/SkipNext';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import PauseIcon from '@mui/icons-material/Pause';
 import { Button } from '@chakra-ui/react';
-import { pausePlayback, resumePlayback, skipToNext } from '../network/spotify';
+import { pausePlayback, resumePlayback } from '../network/spotify';
 import "./style.css";
 
 import { logger } from '../components/DebugConsole';
@@ -106,7 +103,6 @@ function WebPlayback(props) {
     }
 
     const current_track = props.currentTrack || defaultTrack;
-    const is_paused = false;
     const is_active = !!props.currentTrack;
 
     const startRadio = async () => {
@@ -115,21 +111,6 @@ function WebPlayback(props) {
         if (props.sdkPlayerStarted) {
             props.sdkPlayerStarted({ current: { pause: pausePlayback, resume: resumePlayback } });
         }
-    }
-
-    const pause = async () => {
-        logger.add('info', "Pausing Spotify via Remote API...");
-        await pausePlayback();
-    }
-
-    const play = async () => {
-        logger.add('info', "Resuming Spotify via Remote API...");
-        await resumePlayback();
-    }
-
-    const skip = async () => {
-        logger.add('info', "Skipping to next track via Remote API...");
-        await skipToNext();
     }
 
     if (!is_active) { 
@@ -179,19 +160,16 @@ function WebPlayback(props) {
                     <div className="now-playing__name">{current_track.name}</div>
                     <div className="now-playing__artist">{current_track.artists[0]?.name}</div>
 
-                    <div className='btn-spotify-container'>
-                        {is_paused ? 
-                         <button className="btn-spotify play-pause-btn" onClick={() => play() } >
-                            <PlayArrowIcon fontSize="large" /> 
-                         </button>
-                        : 
-                         <button className="btn-spotify play-pause-btn" onClick={() => pause() } >
-                            <PauseIcon fontSize="large" /> 
-                         </button>
-                        }
-                        <button className="btn-spotify" onClick={() => skip() } >
-                            <SkipNextIcon fontSize="large"/>
-                        </button>
+                    <div className='btn-spotify-container' style={{ flexDirection: 'column', gap: '12px', width: '100%' }}>
+                        <audio 
+                            controls 
+                            autoPlay 
+                            src="https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run/stream/live.mp3" 
+                            style={{ width: '100%', borderRadius: '12px' }} 
+                        />
+                        <div style={{ fontSize: '0.8rem', color: '#1DB954', fontWeight: 600 }}>
+                            📻 Live Continuous Radio Broadcast Stream Active
+                        </div>
                     </div>
                 </div>
             </div>
