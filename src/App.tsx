@@ -88,6 +88,7 @@ function App() {
   const scheduledTrackIdRef = useRef<string | null>(null);
   const lastProgressMsRef = useRef<number>(0);
   const silentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const pwaWorkerRef = useRef<Worker | null>(null);
 
   const initializeLiveKeepAlive = () => {
     if (!silentAudioRef.current) {
@@ -168,6 +169,24 @@ function App() {
       }
     };
 
+    // Instantiate Web Worker for unthrottled background PWA clock
+    try {
+      if (window.Worker) {
+        const worker = new Worker('/pwaWorker.js');
+        pwaWorkerRef.current = worker;
+        worker.onmessage = async (e) => {
+          if (e.data && e.data.event === 'trackEndTrigger') {
+            logger.add('event', `PWA Worker track end trigger fired! Pausing Spotify and playing host speech...`);
+            await pausePlayback();
+            await triggerRadioHostAndSkip();
+          }
+        };
+        logger.add('info', "PWA Unthrottled Worker Clock Initialized");
+      }
+    } catch (err) {
+      logger.add('warn', "Web Worker initialization fallback");
+    }
+
     t();
     initializeLiveKeepAlive();
 
@@ -191,21 +210,32 @@ function App() {
               scheduledTrackIdRef.current = data.item.id;
               lastProgressMsRef.current = data.progress_ms;
 
+              const targetMs = Math.max(0, remainingMs - 300);
+              logger.add('info', `Scheduling PWA Worker countdown: ${Math.round(remainingMs / 1000)}s remaining for "${data.item.name}"`);
+
+              // Schedule on unthrottled Web Worker thread
+              if (pwaWorkerRef.current) {
+                pwaWorkerRef.current.postMessage({
+                  command: 'schedule',
+                  targetTimeMs: Date.now() + targetMs,
+                  trackId: data.item.id
+                });
+              }
+
+              // Main-thread fallback
               if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
-
-              logger.add('info', `Precision timer scheduled: ${Math.round(remainingMs / 1000)}s remaining for "${data.item.name}"`);
-
               transitionTimerRef.current = setTimeout(async () => {
-                logger.add('event', `Precision track end timer fired for "${data.item.name}"! Pausing and playing host speech...`);
+                logger.add('event', `Precision track end timer fired for "${data.item.name}"!`);
                 await pausePlayback();
                 await triggerRadioHostAndSkip();
-              }, Math.max(0, remainingMs - 300));
+              }, targetMs);
             }
           }
 
           if (data.item.name && data.item.name !== currentTrackNameRef.current) {
             logger.add('event', `Spotify track changed: "${currentTrackNameRef.current}" -> "${data.item.name}"`);
             if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+            if (pwaWorkerRef.current) pwaWorkerRef.current.postMessage({ command: 'cancel' });
             currentTrackNameRef.current = data.item.name;
             onPlayerChange(data.item, { current: { pause: pausePlayback, resume: resumePlayback } });
           }
@@ -219,6 +249,7 @@ function App() {
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+      if (pwaWorkerRef.current) pwaWorkerRef.current.postMessage({ command: 'cancel' });
     };
 
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

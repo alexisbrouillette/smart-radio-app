@@ -42,14 +42,13 @@ The AI Host speaks **exactly once every 2 songs** at target indices $k \in \{2, 
 ### 4.2 Precision Track End Timer Engine (0ms Latency)
 - **Problem**: Polling Spotify's API after a track changes introduces 1–2.5 seconds of lag, causing the next song to play briefly before pausing.
 - **Solution**: 
-  1. `WebPlayback.jsx` reads `duration_ms` and `progress_ms` from Spotify's API.
+  1. `App.tsx` root engine reads `duration_ms` and `progress_ms` from Spotify's API.
   2. Calculates remaining track duration: `remainingMs = duration_ms - progress_ms`.
-  3. Schedules a local JavaScript timer (`setTimeout`) **300ms before track end**.
-  4. When the timer fires:
-     - Issues `pausePlayback()` (pauses Song A right at the 200ms end boundary).
-     - Plays pre-synthesized Kokoro TTS WAV audio / Web Speech API speech out loud (*"That was Song A. Up next, Song B!"*).
+  3. Posts target countdown timestamp (`targetTimeMs = Date.now() + (remainingMs - 300)`) to the background **PWA Web Worker**.
+  4. When the Web Worker fires `trackEndTrigger`:
+     - Issues `pausePlayback()` (pauses Song A right at the 300ms end boundary).
+     - Plays pre-synthesized Kokoro TTS WAV audio out loud (*"That was Song A. Up next, Song B!"*).
      - Once speech completes, issues `skipToNext()` to start Song B with zero audio overlap.
-  5. Dynamic Seek Re-Sync: If the user seeks forward/backward (>3s jump), the timer automatically re-calculates and reschedules.
 
 ---
 
@@ -65,20 +64,22 @@ The AI Host speaks **exactly once every 2 songs** at target indices $k \in \{2, 
 - **Result**: ❌ **FAILED on Mobile**.
 - **Cause**: iOS WebKit and Android Chrome inspect audio duration (0.0001s). WebKit classifies short silent data URIs as "fake keep-alives" and suspends CPU execution (0 Hz) when screen locks.
 
-### 5.3 Experiment 3: Continuous Web Audio `MediaStreamDestination` Live Stream (ACTIVE)
+### 5.3 Experiment 3: Continuous Web Audio `MediaStreamDestination` Live Stream
 - **Approach**: Create an infinite Web Audio oscillator and connect a `MediaStreamDestination` to `audio.srcObject = dst.stream`, bound to `navigator.mediaSession.playbackState = 'playing'`.
-- **Status**: 🟢 **TESTING / ACTIVE**.
-- **Rationale**: Mobile WebKit evaluates continuous `MediaStream` objects as live audio broadcasts (like live radio or music streaming), granting active media background priority.
+- **Result**: 🟡 **PARTIAL / MIXED**.
+- **Cause**: Prevents browser tab discarding, but main-thread `setInterval` callbacks still suffer timer coalescing during prolonged screen-off phases on Android PWA.
 
-### 5.4 Experiment 4: Server-Side Background Listening Engine (PLANNED BACKUP)
-- **Approach**: Move track monitoring to Python server backend (`modal_app.py`).
-- **Status**: ⏳ **PLANNED BACKUP**.
-- **Rationale**: Backend Python runs 24/7 with zero OS power limits, triggering audio pre-fetching and Web Push / SSE notifications to the phone.
+### 5.4 Experiment 5: Dedicated Web Worker Background Clock for PWA (ACTIVE / NEW)
+- **File**: `public/pwaWorker.js` + `App.tsx` Integration.
+- **Approach**: Offload countdown timing to a background Web Worker (`WorkerGlobalScope`) running off the main UI thread at 100ms ticks (`pwaWorker.postMessage({ command: 'schedule', targetTimeMs })`).
+- **Status**: 🟢 **ACTIVE / TESTING**.
+- **Rationale**: Web Workers execute in an isolated global scope separate from DOM rendering and main-thread UI layout throttling. In standalone PWA mode, background Web Worker timers continue ticking when main-thread timers freeze.
 
 ---
 
 ## 6. Key Files Directory
-- `src/App.tsx`: Central state coordinator, queue renderer, and radio item manager.
-- `src/WebPlayback/WebPlayback.jsx`: Polling engine, precision track-end timer, live MediaStream keep-alive, and remote playback controller.
+- `public/pwaWorker.js`: Dedicated background Web Worker timer running off the main UI thread.
+- `src/App.tsx`: Central state coordinator, queue renderer, root polling engine, and Web Worker manager.
+- `src/WebPlayback/WebPlayback.jsx`: Presentation component for currently playing song cover art and controls.
 - `src/network/spotify.ts`: Spotify Web API network requests (`getUserQueue`, `getCurrentlyPlaying`, `pausePlayback`, `skipToNext`, `getToken`, `getTokenFromrefreshToken`, `generate_queue_texts`, `generate_queue_audio`).
 - `src/spotifyTokenHandling/index.ts`: PKCE token handling, localStorage persistence, and dynamic `redirect_uri` resolution.
