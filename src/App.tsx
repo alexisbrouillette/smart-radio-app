@@ -187,30 +187,32 @@ function App() {
     if (fetchedNewRadioItems) {
       setFetchedNewRadioItems(false);
       
-      if (queue.length === 0) return;
+      if (queue.length < 3) return;
 
       let newFetchingRadioFor: Track[] = [];
 
-      if (radioItems.length === 0) {
-        // First radio item is placed before Song 3 (introducing transition between Song 2 and Song 3)
-        if (queue.length >= 3) {
-          newFetchingRadioFor = [queue[1], queue[2]];
-        } else if (queue.length === 2) {
-          newFetchingRadioFor = [queue[0], queue[1]];
-        }
+      if (radioItemsRef.current.length === 0) {
+        // Initial radio item: Transition between Song 2 (queue[1]) and Song 3 (queue[2])
+        newFetchingRadioFor = [queue[1], queue[2]];
       } else {
-        const lastRadioItem = radioItems[radioItems.length - 1];
+        const lastRadioItem = radioItemsRef.current[radioItemsRef.current.length - 1];
         const lastIndex = queue.findIndex((track) => track.id === lastRadioItem.beforeTrackId);
         
-        // Advance by 2 songs (Song 2 -> Song 3, then Song 4 -> Song 5)
+        // Strict 2-song cadence (Song 2 -> Song 3, then Song 4 -> Song 5, etc.)
         if (lastIndex > -1 && lastIndex + 2 < queue.length) {
           newFetchingRadioFor = [queue[lastIndex + 1], queue[lastIndex + 2]];
         }
       }
 
       if (newFetchingRadioFor.length > 0) {
-        logger.add('info', `Queueing AI host transition between "${newFetchingRadioFor[0].name}" and "${newFetchingRadioFor[1].name}"`);
-        setFetchingRadioFor(newFetchingRadioFor);
+        // Check if we already scheduled this transition to avoid duplicate initial triggers
+        const targetTrackId = newFetchingRadioFor[1].id;
+        const alreadyScheduled = radioItemsRef.current.some(item => item.beforeTrackId === targetTrackId);
+        
+        if (!alreadyScheduled) {
+          logger.add('info', `Queueing AI host transition between "${newFetchingRadioFor[0].name}" and "${newFetchingRadioFor[1].name}"`);
+          setFetchingRadioFor(newFetchingRadioFor);
+        }
       }
     }
   }, [fetchedNewRadioItems]); // eslint-disable-line react-hooks/exhaustive-deps
