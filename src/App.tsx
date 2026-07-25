@@ -101,14 +101,16 @@ function App() {
           if (res && res.access_token) {
             currentToken.save(res);
             setGotToken(true);
-          } else if (currentToken.access_token) {
-            setGotToken(true);
           } else {
-            logger.add('warn', "Spotify token expired - redirecting to Spotify Login...");
+            logger.add('warn', "No valid Spotify token - redirecting to Spotify Login...");
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
             redirectToSpotifyAuthorize();
           }
         } catch (e) {
           logger.add('warn', "Spotify token refresh error - redirecting to Spotify Login...");
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
           redirectToSpotifyAuthorize();
         }
       }

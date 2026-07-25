@@ -58,7 +58,15 @@ function WebPlayback(props) {
             }
         }
         if (audioContext.current && audioContext.current.state === 'suspended') {
-            audioContext.current.resume().catch(() => {});
+            const resumeAudio = () => {
+                if (audioContext.current && audioContext.current.state === 'suspended') {
+                    audioContext.current.resume().catch(() => {});
+                }
+                window.removeEventListener('click', resumeAudio);
+                window.removeEventListener('touchstart', resumeAudio);
+            };
+            window.addEventListener('click', resumeAudio, { once: true });
+            window.addEventListener('touchstart', resumeAudio, { once: true });
         }
 
         if ('mediaSession' in navigator) {
