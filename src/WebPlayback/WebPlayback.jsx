@@ -40,33 +40,53 @@ function WebPlayback(props) {
     };
 
     const silentAudioRef = useRef(null);
+    const audioCtxRef = useRef(null);
 
     const initializeAudioContext = async () => {
         if (!silentAudioRef.current) {
             try {
-                // 44.1kHz silent WAV audio base64 payload to satisfy mobile OS Media Session Keep-Alive rules
-                const silentWav = "data:audio/wav;base64,UklGRjIAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQ8AAACAgICAgICAgICAgICA";
-                const audio = new Audio(silentWav);
-                audio.loop = true;
-                audio.volume = 0.01;
-                silentAudioRef.current = audio;
+                // Create a real Web Audio MediaStreamDestination live audio stream
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (AudioCtx) {
+                    const ctx = new AudioCtx();
+                    audioCtxRef.current = ctx;
+                    
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    const dst = ctx.createMediaStreamDestination();
+                    
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(440, ctx.currentTime);
+                    gain.gain.setValueAtTime(0.00001, ctx.currentTime); // Inaudible background tone
+                    
+                    osc.connect(gain);
+                    gain.connect(dst);
+                    osc.start();
 
-                const startSilentAudio = async () => {
-                    try {
-                        await audio.play();
-                        logger.add('info', "HTML5 Silent Audio Keep-Alive active (Screen-off exemption granted)");
-                        if ('mediaSession' in navigator) {
-                            navigator.mediaSession.playbackState = 'playing';
-                        }
-                    } catch (e) {}
-                };
+                    const audio = new Audio();
+                    audio.srcObject = dst.stream;
+                    audio.volume = 0.01;
+                    silentAudioRef.current = audio;
 
-                startSilentAudio();
+                    const startLiveStream = async () => {
+                        try {
+                            if (ctx.state === 'suspended') {
+                                await ctx.resume();
+                            }
+                            await audio.play();
+                            logger.add('info', "Live MediaStream Keep-Alive active (Screen-off execution granted)");
+                            if ('mediaSession' in navigator) {
+                                navigator.mediaSession.playbackState = 'playing';
+                            }
+                        } catch (e) {}
+                    };
 
-                window.addEventListener('click', startSilentAudio, { once: true });
-                window.addEventListener('touchstart', startSilentAudio, { once: true });
+                    startLiveStream();
+                    window.addEventListener('click', startLiveStream, { once: true });
+                    window.addEventListener('touchstart', startLiveStream, { once: true });
+                }
             } catch (e) {
-                console.error("Silent audio initialization error:", e);
+                console.error("Live MediaStream initialization error:", e);
             }
         }
 
