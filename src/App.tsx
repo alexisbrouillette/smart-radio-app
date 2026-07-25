@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import './App.css';
 import { Button, Stack } from '@chakra-ui/react';
 import { currentToken, redirectToSpotifyAuthorize } from './spotifyTokenHandling';
-import { getToken, getUserQueue, generate_queue_texts, generate_queue_audio, getTokenFromrefreshToken, skipToNext } from './network/spotify';
+import { getToken, getUserQueue, generate_queue_texts, generate_queue_audio, getTokenFromrefreshToken, skipToNext, getCurrentlyPlaying, pausePlayback, resumePlayback } from './network/spotify';
 import { SongCard } from './songCard';
 
 import { Track } from "@spotify/web-api-ts-sdk";
@@ -79,6 +79,58 @@ function App() {
       }
     });
   }
+
+  // Root-level Radio Engine References
+  const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
+  const currentTrackNameRef = useRef<string>("");
+  const pollIntervalRef = useRef<any>(null);
+  const transitionTimerRef = useRef<any>(null);
+  const scheduledTrackIdRef = useRef<string | null>(null);
+  const lastProgressMsRef = useRef<number>(0);
+  const silentAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const initializeLiveKeepAlive = () => {
+    if (!silentAudioRef.current) {
+      try {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          const ctx = new AudioCtx();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          const dst = ctx.createMediaStreamDestination();
+          
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(440, ctx.currentTime);
+          gain.gain.setValueAtTime(0.00001, ctx.currentTime);
+          
+          osc.connect(gain);
+          gain.connect(dst);
+          osc.start();
+
+          const audio = new Audio();
+          audio.srcObject = dst.stream;
+          audio.volume = 0.01;
+          silentAudioRef.current = audio;
+
+          const startStream = async () => {
+            try {
+              if (ctx.state === 'suspended') await ctx.resume();
+              await audio.play();
+              logger.add('info', "Root Live MediaStream Keep-Alive Active");
+              if ('mediaSession' in navigator) {
+                navigator.mediaSession.playbackState = 'playing';
+              }
+            } catch (e) {}
+          };
+
+          startStream();
+          window.addEventListener('click', startStream, { once: true });
+          window.addEventListener('touchstart', startStream, { once: true });
+        }
+      } catch (e) {}
+    }
+  };
+
   useEffect(() => {
     console.log("COMPONENT DID MOUNT");
     const t = async () => {
@@ -114,12 +166,62 @@ function App() {
           redirectToSpotifyAuthorize();
         }
       }
-
-    }
+    };
 
     t();
+    initializeLiveKeepAlive();
 
-  }, []);
+    // Root-level Spotify Polling & Precision Timing Engine
+    const pollSpotifyState = async () => {
+      try {
+        const data = await getCurrentlyPlaying();
+        if (data && data.item) {
+          setCurrentTrack(data.item);
+
+          // Precision Local Timer: ONLY schedule pause timer if a radio host item is pending!
+          const hasPendingRadioItem = radioItemsRef.current.length > 0;
+
+          if (hasPendingRadioItem && data.is_playing && data.progress_ms && data.item.duration_ms) {
+            const remainingMs = data.item.duration_ms - data.progress_ms;
+            const progressDelta = Math.abs(data.progress_ms - (lastProgressMsRef.current + 2000));
+            const userSeeked = progressDelta > 3000;
+            const needsScheduling = scheduledTrackIdRef.current !== data.item.id || userSeeked;
+
+            if (remainingMs > 500 && remainingMs < 600000 && needsScheduling) {
+              scheduledTrackIdRef.current = data.item.id;
+              lastProgressMsRef.current = data.progress_ms;
+
+              if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+
+              logger.add('info', `Precision timer scheduled: ${Math.round(remainingMs / 1000)}s remaining for "${data.item.name}"`);
+
+              transitionTimerRef.current = setTimeout(async () => {
+                logger.add('event', `Precision track end timer fired for "${data.item.name}"! Pausing and playing host speech...`);
+                await pausePlayback();
+                await triggerRadioHostAndSkip();
+              }, Math.max(0, remainingMs - 300));
+            }
+          }
+
+          if (data.item.name && data.item.name !== currentTrackNameRef.current) {
+            logger.add('event', `Spotify track changed: "${currentTrackNameRef.current}" -> "${data.item.name}"`);
+            if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+            currentTrackNameRef.current = data.item.name;
+            onPlayerChange(data.item, { current: { pause: pausePlayback, resume: resumePlayback } });
+          }
+        }
+      } catch (err) {}
+    };
+
+    pollSpotifyState();
+    pollIntervalRef.current = setInterval(pollSpotifyState, 2000);
+
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+    };
+
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const getRadioTexts = async (tracks: Track[]) => {
@@ -367,6 +469,7 @@ function App() {
             onPlayerChange={onPlayerChange}
             sdkPlayerStarted={sdkPlayerStarted}
             triggerRadioHostAndSkip={triggerRadioHostAndSkip}
+            currentTrack={currentTrack}
             queue={queue}
           />
           {queue.length > 0 && (

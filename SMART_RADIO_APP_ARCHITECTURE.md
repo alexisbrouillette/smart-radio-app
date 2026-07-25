@@ -29,8 +29,8 @@ It pairs live Spotify streaming with an AI Radio Host powered by **Gemini 2.5 Fl
 
 ## 4. Radio Host Cadence & Timing Engine
 
-### 4.1 2-Song Interval Cadence
-The AI Host speaks **exactly once every 2 songs**:
+### 4.1 2-Song Interval Cadence & Mathematical Index Formula
+The AI Host speaks **exactly once every 2 songs** at target indices $k \in \{2, 4, 6, 8 \dots\}$:
 - **Currently Playing Track** (Now Playing)
 - **Song 1** (Music only)
 - **Song 2** (Music only)
@@ -42,38 +42,43 @@ The AI Host speaks **exactly once every 2 songs**:
 ### 4.2 Precision Track End Timer Engine (0ms Latency)
 - **Problem**: Polling Spotify's API after a track changes introduces 1–2.5 seconds of lag, causing the next song to play briefly before pausing.
 - **Solution**: 
-  1. `WebPlayback.jsx` polls Spotify's `GET /v1/me/player/currently-playing` every 2 seconds.
+  1. `WebPlayback.jsx` reads `duration_ms` and `progress_ms` from Spotify's API.
   2. Calculates remaining track duration: `remainingMs = duration_ms - progress_ms`.
   3. Schedules a local JavaScript timer (`setTimeout`) **300ms before track end**.
   4. When the timer fires:
-     - Issues `pausePlayback()` (pauses Song A right at the track boundary).
+     - Issues `pausePlayback()` (pauses Song A right at the 200ms end boundary).
      - Plays pre-synthesized Kokoro TTS WAV audio / Web Speech API speech out loud (*"That was Song A. Up next, Song B!"*).
      - Once speech completes, issues `skipToNext()` to start Song B with zero audio overlap.
-  5. If the user seeks forward/backward in Spotify, the progress jump (>3s) is detected, and the precision timer automatically re-synchronizes.
+  5. Dynamic Seek Re-Sync: If the user seeks forward/backward (>3s jump), the timer automatically re-calculates and reschedules.
 
 ---
 
-## 5. State Management & React Ref Integrity
+## 5. Mobile Background Execution & Screen-Off Experiments Log
 
-### 5.1 React Closures & `useRef`
-- Async event listeners and interval loops capture state variables at closure creation time.
-- Mutable state references (`radioItemsRef.current`, `radioTextToAudioQueueRef.current`) are maintained alongside React state (`radioItems`, `radioTextToAudioQueue`) to ensure async event callbacks always read up-to-date data.
+### 5.1 Experiment 1: Web Playback SDK Browser DRM Stream
+- **Approach**: Instantiate `window.Spotify.Player` in the browser tab.
+- **Result**: ❌ **FAILED on Mobile**.
+- **Cause**: iOS Safari and Android Chrome revoke EME/DRM audio decryption keys when tabs switch or screen locks.
 
-### 5.2 HTTP 204 No Content Handling
-- When Spotify is idle or paused, `/v1/me/player/currently-playing` and `/v1/me/player/queue` return **HTTP 204 No Content** with an empty body.
-- Both `getCurrentlyPlaying()` and `getUserQueue()` check `response.status === 204 || response.status === 401` before executing `.json()`, avoiding `SyntaxError: Unexpected end of JSON input`.
+### 5.2 Experiment 2: Tiny Base64 Silent Audio Data URI
+- **Approach**: Loop a 44-byte base64 silent WAV data URI (`data:audio/wav;base64,UklGRjIA...`) in an HTML5 `<audio>` element.
+- **Result**: ❌ **FAILED on Mobile**.
+- **Cause**: iOS WebKit and Android Chrome inspect audio duration (0.0001s). WebKit classifies short silent data URIs as "fake keep-alives" and suspends CPU execution (0 Hz) when screen locks.
+
+### 5.3 Experiment 3: Continuous Web Audio `MediaStreamDestination` Live Stream (ACTIVE)
+- **Approach**: Create an infinite Web Audio oscillator and connect a `MediaStreamDestination` to `audio.srcObject = dst.stream`, bound to `navigator.mediaSession.playbackState = 'playing'`.
+- **Status**: 🟢 **TESTING / ACTIVE**.
+- **Rationale**: Mobile WebKit evaluates continuous `MediaStream` objects as live audio broadcasts (like live radio or music streaming), granting active media background priority.
+
+### 5.4 Experiment 4: Server-Side Background Listening Engine (PLANNED BACKUP)
+- **Approach**: Move track monitoring to Python server backend (`modal_app.py`).
+- **Status**: ⏳ **PLANNED BACKUP**.
+- **Rationale**: Backend Python runs 24/7 with zero OS power limits, triggering audio pre-fetching and Web Push / SSE notifications to the phone.
 
 ---
 
-## 6. Progressive Web App (PWA) Setup
-- `public/manifest.json`: Configured with `"display": "standalone"`.
-- Service Worker (`public/service-worker.js`): Caches static shell assets.
-- Auto-Update Reloader (`src/index.tsx`): Listens for `registration.onupdatefound` and reloads `window.location` automatically when new Vercel builds are deployed.
-
----
-
-## 7. Key Files Directory
+## 6. Key Files Directory
 - `src/App.tsx`: Central state coordinator, queue renderer, and radio item manager.
-- `src/WebPlayback/WebPlayback.jsx`: Polling engine, precision track-end timer, and remote playback controller.
+- `src/WebPlayback/WebPlayback.jsx`: Polling engine, precision track-end timer, live MediaStream keep-alive, and remote playback controller.
 - `src/network/spotify.ts`: Spotify Web API network requests (`getUserQueue`, `getCurrentlyPlaying`, `pausePlayback`, `skipToNext`, `getToken`, `getTokenFromrefreshToken`, `generate_queue_texts`, `generate_queue_audio`).
 - `src/spotifyTokenHandling/index.ts`: PKCE token handling, localStorage persistence, and dynamic `redirect_uri` resolution.

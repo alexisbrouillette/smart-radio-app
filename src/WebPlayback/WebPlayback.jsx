@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useRef } from 'react';
 import SkipNextIcon from '@mui/icons-material/SkipNext';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import { Button } from '@chakra-ui/react';
-import { getCurrentlyPlaying, pausePlayback, resumePlayback, skipToNext } from '../network/spotify';
+import { pausePlayback, resumePlayback, skipToNext } from '../network/spotify';
 import "./style.css";
 
 import { logger } from '../components/DebugConsole';
@@ -22,10 +22,7 @@ const defaultTrack = {
 
 function WebPlayback(props) {
 
-    const [is_paused, setPaused] = useState(false);
-    const [is_active, setActive] = useState(false);
-    const [current_track, setCurrentTrack] = useState(defaultTrack);
-    const current_track_name = useRef("");
+
 
 
     const requestWakeLock = async () => {
@@ -108,108 +105,14 @@ function WebPlayback(props) {
         requestWakeLock();
     }
 
-    const isActiveRef = useRef(false);
-
-    const pollIntervalRef = useRef(null);
-    const transitionTimerRef = useRef(null);
-    const scheduledTrackIdRef = useRef(null);
-    const lastProgressMsRef = useRef(0);
-
-    const pollSpotifyState = async () => {
-        try {
-            const data = await getCurrentlyPlaying();
-            if (data && data.item) {
-                if (!isActiveRef.current) {
-                    isActiveRef.current = true;
-                    setActive(true);
-                    logger.add('event', `Connected to active Spotify player: ${data.item.name}`);
-                    current_track_name.current = data.item.name;
-                    setCurrentTrack(data.item);
-                    props.sdkPlayerStarted({ current: { pause: pausePlayback, resume: resumePlayback } });
-                }
-                setPaused(!data.is_playing);
-
-                // Precision Local Timer: ONLY schedule pause timer if a radio host item is pending!
-                const hasPendingRadioItem = props.radioItems && props.radioItems.length > 0;
-
-                if (hasPendingRadioItem && data.is_playing && data.progress_ms && data.item.duration_ms) {
-                    const remainingMs = data.item.duration_ms - data.progress_ms;
-                    const progressDelta = Math.abs(data.progress_ms - (lastProgressMsRef.current + 2000));
-                    
-                    // If track changed, or track seek occurred (>3s jump), re-synchronize precision timer
-                    const userSeeked = progressDelta > 3000;
-                    const needsScheduling = scheduledTrackIdRef.current !== data.item.id || userSeeked;
-
-                    if (remainingMs > 500 && remainingMs < 600000 && needsScheduling) {
-                        scheduledTrackIdRef.current = data.item.id;
-                        lastProgressMsRef.current = data.progress_ms;
-
-                        if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
-                        
-                        const msg = `Precision timer scheduled: ${Math.round(remainingMs / 1000)}s remaining for "${data.item.name}"`;
-                        console.log(msg);
-                        logger.add('info', msg);
-                        
-                        transitionTimerRef.current = setTimeout(async () => {
-                            const fireMsg = `Precision track end timer fired for "${data.item.name}"! Pausing and playing radio host speech...`;
-                            console.log(fireMsg);
-                            logger.add('event', fireMsg);
-                            await pausePlayback();
-                            if (props.triggerRadioHostAndSkip) {
-                                await props.triggerRadioHostAndSkip();
-                            } else {
-                                await skipToNext();
-                            }
-                        }, Math.max(0, remainingMs - 300));
-                    }
-                } else {
-                    console.log(`Poll tick: is_playing=${data.is_playing}, progress=${data.progress_ms}, duration=${data.item?.duration_ms}, pendingRadioItems=${props.radioItems?.length}`);
-                }
-
-                if (data.item.name && data.item.name !== current_track_name.current) {
-                    logger.add('event', `Spotify track changed: "${current_track_name.current}" -> "${data.item.name}"`);
-                    if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
-                    current_track_name.current = data.item.name;
-                    setCurrentTrack(data.item);
-                    props.onPlayerChange(data.item, { current: { pause: pausePlayback, resume: resumePlayback } });
-                }
-            }
-        } catch (err) {
-            // silent poll catch
-        }
-    };
-
-    // Spotify Connect Remote Polling Engine
-    useEffect(() => {
-        initializeAudioContext();
-
-        pollSpotifyState();
-        pollIntervalRef.current = setInterval(pollSpotifyState, 2000);
-
-        return () => {
-            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-            if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
-        };
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    const current_track = props.currentTrack || defaultTrack;
+    const is_paused = false;
+    const is_active = !!props.currentTrack;
 
     const startRadio = async () => {
         logger.add('event', "Connecting Remote AI Radio Host...");
         initializeAudioContext();
-        try {
-            await resumePlayback();
-        } catch (e) {}
-        const data = await getCurrentlyPlaying();
-        if (data && data.item) {
-            isActiveRef.current = true;
-            setActive(true);
-            current_track_name.current = data.item.name;
-            setCurrentTrack(data.item);
-            props.sdkPlayerStarted({ current: { pause: pausePlayback, resume: resumePlayback } });
-            props.onPlayerChange(data.item, { current: { pause: pausePlayback, resume: resumePlayback } });
-        } else {
-            // Force activate UI if user clicked connect
-            isActiveRef.current = true;
-            setActive(true);
+        if (props.sdkPlayerStarted) {
             props.sdkPlayerStarted({ current: { pause: pausePlayback, resume: resumePlayback } });
         }
     }
@@ -217,13 +120,11 @@ function WebPlayback(props) {
     const pause = async () => {
         logger.add('info', "Pausing Spotify via Remote API...");
         await pausePlayback();
-        setPaused(true);
     }
 
     const play = async () => {
         logger.add('info', "Resuming Spotify via Remote API...");
         await resumePlayback();
-        setPaused(false);
     }
 
     const skip = async () => {
