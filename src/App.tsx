@@ -120,6 +120,12 @@ function App() {
           
           osc.connect(gain);
           gain.connect(dst);
+
+          const audio = new Audio();
+          audio.srcObject = dst.stream;
+          audio.volume = 0.01;
+          silentAudioRef.current = audio;
+
           const startStream = async () => {
             try {
               if (ctx.state === 'suspended') await ctx.resume();
