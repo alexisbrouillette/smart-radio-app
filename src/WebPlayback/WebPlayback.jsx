@@ -279,7 +279,17 @@ function WebPlayback(props) {
                             }}
                             onError={(e) => console.error("❌ [AUDIO DEVTOOLS ERROR] Stream audio element error:", e)}
                             onStalled={() => console.warn("⚠️ [AUDIO DEVTOOLS WARNING] Stream stalled / waiting for data...")}
-                            onWaiting={() => console.warn("⏳ [AUDIO DEVTOOLS WARNING] Stream buffer empty / waiting...")}
+                            onWaiting={() => {
+                                console.warn("⏳ [AUDIO DEVTOOLS WARNING] Stream buffer empty / waiting...");
+                                if (streamAudioRef.current && !streamAudioRef.current.paused) {
+                                    setTimeout(() => {
+                                        if (streamAudioRef.current && streamAudioRef.current.readyState < 3 && !streamAudioRef.current.paused) {
+                                            console.log("🔄 [STREAM RECOVERY] Resuming audio stream...");
+                                            streamAudioRef.current.play().catch(() => {});
+                                        }
+                                    }, 5000);
+                                }
+                            }}
                             style={{ width: '100%', borderRadius: '12px' }} 
                         />
 

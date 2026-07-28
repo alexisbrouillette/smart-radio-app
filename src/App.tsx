@@ -120,17 +120,10 @@ function App() {
           
           osc.connect(gain);
           gain.connect(dst);
-          osc.start();
-
-          const audio = new Audio();
-          audio.srcObject = dst.stream;
-          audio.volume = 0.01;
-          silentAudioRef.current = audio;
-          logger.add('info', "[STATE] MediaStream keep-alive initialized");
-
           const startStream = async () => {
             try {
               if (ctx.state === 'suspended') await ctx.resume();
+              try { osc.start(); } catch (e) {}
               await audio.play();
               logger.add('info', "Root Live MediaStream Keep-Alive Active");
               if ('mediaSession' in navigator) {
@@ -139,7 +132,6 @@ function App() {
             } catch (e) {}
           };
 
-          startStream();
           window.addEventListener('click', startStream, { once: true });
           window.addEventListener('touchstart', startStream, { once: true });
         }
@@ -370,16 +362,29 @@ function App() {
   const getQueue = async () => {
     logger.add('info', "[STATE] Fetching initial user queue from Spotify API...");
     const res = await getUserQueue();
-    if (!res || !res.queue || res.queue.length === 0 || !('album' in res.queue[0])) {
-      logger.add('warn', "Queue returned empty or non-music tracks from Spotify API");
+    if (!res) {
+      logger.add('warn', "Queue returned empty or invalid response from Spotify API");
       return;
     }
 
-    const uniqueTracks = res.queue.filter((track: Track, index: number, self: Track[]) =>
+    const rawList: Track[] = [];
+    if (res.currently_playing && 'album' in res.currently_playing) {
+      rawList.push(res.currently_playing);
+    }
+    if (res.queue && Array.isArray(res.queue)) {
+      rawList.push(...res.queue.filter((t: Track) => 'album' in t));
+    }
+
+    if (rawList.length === 0) {
+      logger.add('warn', "No valid music tracks found in Spotify player queue");
+      return;
+    }
+
+    const uniqueTracks = rawList.filter((track: Track, index: number, self: Track[]) =>
       index === self.findIndex((t) => t.id === track.id)
     );
     
-    // Set initial station state ONCE
+    // Set initial station state ONCE with Spotify currently_playing
     if (!currentTrackRef.current) {
       setCurrentTrack(uniqueTracks[0]);
       setQueue(uniqueTracks.slice(1));
