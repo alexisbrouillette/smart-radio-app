@@ -100,11 +100,7 @@ function App() {
     return () => clearInterval(interval);
   }, [queue]);
 
-  const currentTrackNameRef = useRef<string>("");
-  const pollIntervalRef = useRef<any>(null);
   const transitionTimerRef = useRef<any>(null);
-  const scheduledTrackIdRef = useRef<string | null>(null);
-  const lastProgressMsRef = useRef<number>(0);
   const silentAudioRef = useRef<HTMLAudioElement | null>(null);
   const pwaWorkerRef = useRef<Worker | null>(null);
 
@@ -222,9 +218,12 @@ function App() {
     });
     initializeLiveKeepAlive();
 
+    const currentTimer = transitionTimerRef.current;
+    const currentWorker = pwaWorkerRef.current;
+
     return () => {
-      if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
-      if (pwaWorkerRef.current) pwaWorkerRef.current.postMessage({ command: 'cancel' });
+      if (currentTimer) clearTimeout(currentTimer);
+      if (currentWorker) currentWorker.postMessage({ command: 'cancel' });
     };
 
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
