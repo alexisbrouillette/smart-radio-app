@@ -1,4 +1,4 @@
-const CACHE_NAME = 'smart-radio-app-v2';
+const CACHE_NAME = 'smart-radio-app-v3';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -37,6 +37,9 @@ self.addEventListener('fetch', (event) => {
   if (
     event.request.url.includes('spotify.com') || 
     event.request.url.includes('modal.run') ||
+    event.request.url.includes('127.0.0.1:8000') ||
+    event.request.url.includes('localhost:8000') ||
+    event.request.url.includes('/stream/') ||
     event.request.method !== 'GET'
   ) {
     return;

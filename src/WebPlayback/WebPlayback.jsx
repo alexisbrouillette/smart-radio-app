@@ -1,6 +1,6 @@
-import React, { useRef } from 'react';
-import { Button } from '@chakra-ui/react';
-import { pausePlayback, resumePlayback } from '../network/spotify';
+import React, { useRef, useState } from 'react';
+import { Button, IconButton, Flex, Text } from '@chakra-ui/react';
+import { pausePlayback, resumePlayback, skipToNext, skipToPrevious } from '../network/spotify';
 import "./style.css";
 
 import { logger } from '../components/DebugConsole';
@@ -18,9 +18,8 @@ const defaultTrack = {
 }
 
 function WebPlayback(props) {
-
-
-
+    const [isPlaying, setIsPlaying] = useState(true);
+    const streamAudioRef = useRef(null);
 
     const requestWakeLock = async () => {
         try {
@@ -39,7 +38,6 @@ function WebPlayback(props) {
     const initializeAudioContext = async () => {
         if (!silentAudioRef.current) {
             try {
-                // Create a real Web Audio MediaStreamDestination live audio stream
                 const AudioCtx = window.AudioContext || window.webkitAudioContext;
                 if (AudioCtx) {
                     const ctx = new AudioCtx();
@@ -51,7 +49,7 @@ function WebPlayback(props) {
                     
                     osc.type = 'sine';
                     osc.frequency.setValueAtTime(440, ctx.currentTime);
-                    gain.gain.setValueAtTime(0.00001, ctx.currentTime); // Inaudible background tone
+                    gain.gain.setValueAtTime(0.00001, ctx.currentTime);
                     
                     osc.connect(gain);
                     gain.connect(dst);
@@ -92,10 +90,16 @@ function WebPlayback(props) {
             });
             try {
                 navigator.mediaSession.setActionHandler('play', () => {
-                    if (silentAudioRef.current) silentAudioRef.current.play();
+                    handlePlayPauseToggle();
                 });
                 navigator.mediaSession.setActionHandler('pause', () => {
-                    if (silentAudioRef.current) silentAudioRef.current.pause();
+                    handlePlayPauseToggle();
+                });
+                navigator.mediaSession.setActionHandler('nexttrack', () => {
+                    handleNext();
+                });
+                navigator.mediaSession.setActionHandler('previoustrack', () => {
+                    handlePrevious();
                 });
             } catch (e) {}
         }
@@ -112,6 +116,35 @@ function WebPlayback(props) {
             props.sdkPlayerStarted({ current: { pause: pausePlayback, resume: resumePlayback } });
         }
     }
+
+    const handlePlayPauseToggle = async () => {
+        if (streamAudioRef.current) {
+            if (isPlaying) {
+                streamAudioRef.current.pause();
+                await pausePlayback();
+                setIsPlaying(false);
+                logger.add('info', "Playback paused");
+            } else {
+                streamAudioRef.current.play().catch(() => {});
+                await resumePlayback();
+                setIsPlaying(true);
+                logger.add('info', "Playback resumed");
+            }
+        }
+    };
+
+    const handleNext = async () => {
+        logger.add('event', "User clicked Skip Next Track");
+        if (props.advanceToNextTrack) {
+            props.advanceToNextTrack();
+        }
+        await skipToNext();
+    };
+
+    const handlePrevious = async () => {
+        logger.add('event', "User clicked Skip Previous Track");
+        await skipToPrevious();
+    };
 
     if (!is_active) { 
         return (
@@ -152,6 +185,30 @@ function WebPlayback(props) {
             </div>
         );
     } else {
+        const nextTrackItem = (props.queue && props.queue.length > 0) ? props.queue[0] : null;
+        const thirdTrackItem = (props.queue && props.queue.length > 1) ? props.queue[1] : null;
+
+        const nextTrackParam = nextTrackItem 
+            ? `&nextTrack=${encodeURIComponent(nextTrackItem.name + " " + (nextTrackItem.artists[0]?.name || ""))}`
+            : '';
+
+        const thirdTrackParam = thirdTrackItem 
+            ? `&thirdTrack=${encodeURIComponent(thirdTrackItem.name + " " + (thirdTrackItem.artists[0]?.name || ""))}`
+            : '';
+
+        const activeRadioItem = (props.radioItems && props.radioItems.length > 0) 
+            ? props.radioItems.find(item => item.beforeTrackId === current_track.id)
+            : null;
+        const hostTextParam = activeRadioItem
+            ? `&hostText=${encodeURIComponent(activeRadioItem.text)}`
+            : '';
+
+        const trackParam = `track=${encodeURIComponent(current_track.name + " " + (current_track.artists[0]?.name || ""))}`;
+
+        const API_BASE = process.env.REACT_APP_API_SERVER || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'https://127.0.0.1:8000' : 'https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run');
+
+        const streamUrl = `${API_BASE}/stream/live.mp3?${trackParam}${nextTrackParam}${thirdTrackParam}${hostTextParam}`;
+
         return (
             <div className="glass-panel player-container">
                 <img src={current_track.album.images[0]?.url} className="now-playing__cover" alt="Album Cover" />
@@ -160,16 +217,75 @@ function WebPlayback(props) {
                     <div className="now-playing__name">{current_track.name}</div>
                     <div className="now-playing__artist">{current_track.artists[0]?.name}</div>
 
-                    <div className='btn-spotify-container' style={{ flexDirection: 'column', gap: '12px', width: '100%' }}>
+                    <div className='btn-spotify-container' style={{ flexDirection: 'column', gap: '16px', width: '100%', alignItems: 'center' }}>
                         <audio 
+                            ref={streamAudioRef}
                             controls 
                             autoPlay 
-                            src="https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run/stream/live.mp3" 
+                            src={streamUrl} 
+                            onPlay={() => console.log("🔊 [AUDIO DEVTOOLS LOG] Stream started playing:", streamUrl)}
+                            onPause={() => console.log("⏸️ [AUDIO DEVTOOLS LOG] Stream paused")}
+                            onEnded={() => {
+                                console.log("🏁 [AUDIO DEVTOOLS LOG] Stream ENDED! Triggering advanceToNextTrack()...");
+                                logger.add('event', "[AUDIO DEVTOOLS LOG] Stream ended, advancing to next track...");
+                                if (props.advanceToNextTrack) props.advanceToNextTrack();
+                            }}
+                            onError={(e) => console.error("❌ [AUDIO DEVTOOLS ERROR] Stream audio element error:", e)}
+                            onStalled={() => console.warn("⚠️ [AUDIO DEVTOOLS WARNING] Stream stalled / waiting for data...")}
+                            onWaiting={() => console.warn("⏳ [AUDIO DEVTOOLS WARNING] Stream buffer empty / waiting...")}
                             style={{ width: '100%', borderRadius: '12px' }} 
                         />
-                        <div style={{ fontSize: '0.8rem', color: '#1DB954', fontWeight: 600 }}>
+
+                        {/* Interactive Playback Control Buttons */}
+                        <Flex gap="20px" align="center" justify="center" mt="8px">
+                            {/* Skip Previous Button */}
+                            <IconButton
+                                aria-label="Previous Track"
+                                icon={<span style={{ fontSize: '1.4rem' }}>⏮️</span>}
+                                onClick={handlePrevious}
+                                borderRadius="full"
+                                bg="rgba(255, 255, 255, 0.1)"
+                                color="white"
+                                _hover={{ bg: "rgba(255, 255, 255, 0.2)", transform: "scale(1.1)" }}
+                                _active={{ transform: "scale(0.95)" }}
+                                transition="all 0.2s"
+                                size="lg"
+                            />
+
+                            {/* Play / Pause Toggle Button */}
+                            <IconButton
+                                aria-label={isPlaying ? "Pause" : "Play"}
+                                icon={<span style={{ fontSize: '1.6rem' }}>{isPlaying ? '⏸️' : '▶️'}</span>}
+                                onClick={handlePlayPauseToggle}
+                                borderRadius="full"
+                                bg="#1DB954"
+                                color="black"
+                                _hover={{ bg: "#1ed760", transform: "scale(1.15)" }}
+                                _active={{ transform: "scale(0.95)" }}
+                                transition="all 0.2s"
+                                size="xl"
+                                width="64px"
+                                height="64px"
+                            />
+
+                            {/* Skip Next Button */}
+                            <IconButton
+                                aria-label="Next Track"
+                                icon={<span style={{ fontSize: '1.4rem' }}>⏭️</span>}
+                                onClick={handleNext}
+                                borderRadius="full"
+                                bg="rgba(255, 255, 255, 0.1)"
+                                color="white"
+                                _hover={{ bg: "rgba(255, 255, 255, 0.2)", transform: "scale(1.1)" }}
+                                _active={{ transform: "scale(0.95)" }}
+                                transition="all 0.2s"
+                                size="lg"
+                            />
+                        </Flex>
+
+                        <Text style={{ fontSize: '0.8rem', color: '#1DB954', fontWeight: 600 }}>
                             📻 Live Continuous Radio Broadcast Stream Active
-                        </div>
+                        </Text>
                     </div>
                 </div>
             </div>

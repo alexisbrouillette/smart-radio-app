@@ -3,11 +3,12 @@ import { Track } from "@spotify/web-api-ts-sdk";
 import { memo } from "react";
 
 interface SongCardProps {
-    song: Track
+    song: Track;
+    isPreCached?: boolean;
 }
 
 export const SongCard = memo((props : SongCardProps) => {
-    const {song} = props;
+    const {song, isPreCached} = props;
     return (
         <Flex
             alignItems="center"
@@ -30,9 +31,17 @@ export const SongCard = memo((props : SongCardProps) => {
                 boxShadow="0 4px 12px rgba(0,0,0,0.3)"
             />
             <Box flex="1" textAlign="left" minWidth="0">
-                <Text color="white" fontWeight="700" fontSize="0.95rem" noOfLines={1}>
-                    {song.name}
-                </Text>
+                <Flex alignItems="center" gap="8px">
+                    <Text color="white" fontWeight="700" fontSize="0.95rem" noOfLines={1}>
+                        {song.name}
+                    </Text>
+                    {isPreCached && (
+                        <Flex alignItems="center" gap="3px" bg="rgba(29, 185, 84, 0.15)" border="1px solid rgba(29, 185, 84, 0.3)" borderRadius="full" px="8px" py="2px">
+                            <Text fontSize="0.65rem">⚡</Text>
+                            <Text color="#1DB954" fontSize="0.65rem" fontWeight="700">Cached</Text>
+                        </Flex>
+                    )}
+                </Flex>
                 <Text color="#a7a7a7" fontWeight="500" fontSize="0.82rem" noOfLines={1} mt="2px">
                     {song.artists.map(a => a.name).join(", ")}
                 </Text>

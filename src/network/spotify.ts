@@ -171,7 +171,7 @@ export async function generate_queue_texts(queue: Track[], history: any[] = []) 
   };
 }
 export async function generate_queue_audio(text: string): Promise<string | null> {
-  const serverAddress = process.env.REACT_APP_SERVER_ADRESS || 'https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run';
+  const serverAddress = process.env.REACT_APP_SERVER_ADRESS || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'https://127.0.0.1:8000' : 'https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run');
   try {
     console.log("Calling Modal API for audio synthesis:", `${serverAddress}/get_radio_audio`);
     const response = await fetch(`${serverAddress}/get_radio_audio`, {
@@ -263,6 +263,22 @@ export async function skipToNext() {
     }
   } catch (e) {
     console.error("Error skipping Spotify track:", e);
+  }
+}
+
+export async function skipToPrevious() {
+  try {
+    const token = currentToken.access_token;
+    if (!token) return;
+    const res = await fetch("https://api.spotify.com/v1/me/player/previous", {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (res.status === 403 || res.status === 404) {
+      console.warn("Spotify previous: No active device found");
+    }
+  } catch (e) {
+    console.error("Error skipping to previous Spotify track:", e);
   }
 }
 

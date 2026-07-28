@@ -3,7 +3,7 @@ import { RadioItem } from "../App";
 import { memo } from "react";
 
 export const RadioItemCard = memo(({ radioItem }: { radioItem: RadioItem }) => {
-    const isAudioReady = radioItem.audio !== null && radioItem.audio !== 'empty';
+    const isAudioReady = radioItem.status === 'ready';
     return (
       <Flex
         direction="column"
@@ -33,9 +33,9 @@ export const RadioItemCard = memo(({ radioItem }: { radioItem: RadioItem }) => {
               AI Host Transition
             </Text>
           </Flex>
-          <Skeleton isLoaded={isAudioReady} borderRadius="full">
-            <Text color={isAudioReady ? "#1DB954" : "#a855f7"} fontSize="0.7rem" fontWeight="700">
-              {isAudioReady ? "🔊 Voice Ready" : "⚡ Synthesizing Audio..."}
+          <Skeleton isLoaded={true} borderRadius="full">
+            <Text color={isAudioReady ? "#1DB954" : "#eab308"} fontSize="0.7rem" fontWeight="700">
+              {isAudioReady ? "🔊 Voice Ready for Live Stream" : "⚡ Synthesizing AI DJ Speech..."}
             </Text>
           </Skeleton>
         </Flex>

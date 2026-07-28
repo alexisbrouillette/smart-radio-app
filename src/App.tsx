@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import './App.css';
 import { Button, Stack } from '@chakra-ui/react';
 import { currentToken, redirectToSpotifyAuthorize } from './spotifyTokenHandling';
-import { getToken, getUserQueue, generate_queue_texts, generate_queue_audio, getTokenFromrefreshToken, skipToNext, getCurrentlyPlaying, pausePlayback, resumePlayback } from './network/spotify';
+import { getToken, getUserQueue, generate_queue_texts, getTokenFromrefreshToken, skipToNext, getCurrentlyPlaying, pausePlayback, resumePlayback } from './network/spotify';
 import { SongCard } from './songCard';
 
 import { Track } from "@spotify/web-api-ts-sdk";
@@ -10,32 +10,22 @@ import WebPlayback from './WebPlayback/WebPlayback';
 import { RadioItemCard } from './radioItemCard';
 import { DebugConsole, logger } from './components/DebugConsole';
 
-
-
 export interface RadioItem {
   text: string;
   beforeTrackId: string;
   audio: string | null;
+  status?: 'synthesizing' | 'ready';
 }
 
 function App() {
-  //const express = require('express');
   const [queue, setQueue] = useState<Track []>([]);
-
-  const [fetchedNewRadioItems, setFetchedNewRadioItems] = useState<boolean>(false);
   const trackChanged = useRef(false); // eslint-disable-line @typescript-eslint/no-unused-vars
   const [fetchingRadioFor, setFetchingRadioFor] = useState<Track[]>([]);
   const [, setGotToken] = useState<boolean>(false);
 
-  //this is not sexy but i need to acces it in the useEffect fo fetch the audio and the state is not up to date so i used ref too.. but i need
-  // the rerenders of the state sooo.. yeah
   const [radioItems, setRadioItems] = useState<RadioItem[]>([]);
   const radioItemsRef = useRef<RadioItem[]>([]);
-  const [radioTextToAudioQueue, setRadioTextToAudioQueue] = useState<{text: string, beforeTrackId: string}[]>([]);
-
-  const radioTextToAudioQueueRef = useRef<{text: string, beforeTrackId: string}[]>([]);
   const pastTransitions = useRef<{song: string, artist: string, text: string}[]>([]);
-  const [generatingAudio, setGeneratingAudio] = useState<boolean>(false);
   const [debugText] = useState<string>("");
 
   const playSound = async (audioOrText: string) => {
@@ -81,7 +71,14 @@ function App() {
   }
 
   // Root-level Radio Engine References
-  const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
+  const [currentTrack, setCurrentTrackState] = useState<Track | null>(null);
+  const currentTrackRef = useRef<Track | null>(null);
+
+  const setCurrentTrack = (track: Track | null) => {
+    currentTrackRef.current = track;
+    setCurrentTrackState(track);
+  };
+
   const currentTrackNameRef = useRef<string>("");
   const pollIntervalRef = useRef<any>(null);
   const transitionTimerRef = useRef<any>(null);
@@ -112,6 +109,7 @@ function App() {
           audio.srcObject = dst.stream;
           audio.volume = 0.01;
           silentAudioRef.current = audio;
+          logger.add('info', "[STATE] MediaStream keep-alive initialized");
 
           const startStream = async () => {
             try {
@@ -133,35 +131,46 @@ function App() {
   };
 
   useEffect(() => {
-    console.log("COMPONENT DID MOUNT");
+    logger.add('info', "[STATE] App mounted - initializing Radio Station...");
+    
+    // Check Spotify Auth Tokens
     const t = async () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      let code = urlParams.get('code');
-      if (code) {
-        const token = await getToken(code);
-        currentToken.save(token);
-        setGotToken(true);
-        const url = new URL(window.location.href);
-        url.searchParams.delete("code");
-
-        const updatedUrl = url.search ? url.href : url.href.replace('?', '');
-        window.history.replaceState({}, document.title, updatedUrl);
-      }
-      //else refresh the token
-      else {
+      const token = currentToken.access_token;
+      if (!token || token === 'undefined' || token === 'null') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        if (code) {
+          try {
+            logger.add('info', "[STATE] Exchanging Spotify Auth Code for Access Token...");
+            const data = await getToken(code);
+            if (data.access_token) {
+              currentToken.save(data);
+              setGotToken(true);
+              logger.add('info', "[STATE] Spotify Token exchange successful!");
+              window.history.replaceState({}, document.title, "/");
+            }
+          } catch (e) {
+            logger.add('error', `Token exchange error: ${e}`);
+          }
+        }
+      } else {
         try {
-          const res = await getTokenFromrefreshToken();
-          if (res && res.access_token) {
-            currentToken.save(res);
-            setGotToken(true);
+          const refreshToken = localStorage.getItem('refresh_token');
+          if (refreshToken && refreshToken !== 'undefined' && refreshToken !== 'null') {
+            const data = await getTokenFromrefreshToken();
+            if (data && data.access_token) {
+              currentToken.save(data);
+              setGotToken(true);
+              logger.add('info', "[STATE] Spotify Token refreshed via RefreshToken!");
+            }
           } else {
-            logger.add('warn', "No valid Spotify token - redirecting to Spotify Login...");
+            logger.add('warn', "[STATE] No refresh_token found - redirecting to Spotify login...");
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
             redirectToSpotifyAuthorize();
           }
         } catch (e) {
-          logger.add('warn', "Spotify token refresh error - redirecting to Spotify Login...");
+          logger.add('warn', "[STATE] Spotify token refresh error - redirecting to Spotify Login...");
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
           redirectToSpotifyAuthorize();
@@ -176,173 +185,98 @@ function App() {
         pwaWorkerRef.current = worker;
         worker.onmessage = async (e) => {
           if (e.data && e.data.event === 'trackEndTrigger') {
-            logger.add('event', `PWA Worker track end trigger fired! Pausing Spotify and playing host speech...`);
-            await pausePlayback();
-            await triggerRadioHostAndSkip();
+            logger.add('event', `[STATE] Live broadcast continuous stream handling track transition...`);
           }
         };
-        logger.add('info', "PWA Unthrottled Worker Clock Initialized");
+        logger.add('info', "[STATE] PWA Unthrottled Worker Clock Initialized");
       }
     } catch (err) {
-      logger.add('warn', "Web Worker initialization fallback");
+      logger.add('warn', "[STATE] Web Worker initialization fallback");
     }
 
-    t();
+    t().then(() => {
+      // Fetch initial Spotify Queue ONCE at session start
+      logger.add('info', "[STATE] Fetching Spotify queue ONCE for initial station setup...");
+      getQueue();
+    });
     initializeLiveKeepAlive();
 
-    // Root-level Spotify Polling & Precision Timing Engine
-    const pollSpotifyState = async () => {
-      try {
-        const data = await getCurrentlyPlaying();
-        if (data && data.item) {
-          setCurrentTrack(data.item);
-
-          // Precision Local Timer: ONLY schedule pause timer if a radio host item is pending!
-          const hasPendingRadioItem = radioItemsRef.current.length > 0;
-
-          if (hasPendingRadioItem && data.is_playing && data.progress_ms && data.item.duration_ms) {
-            const remainingMs = data.item.duration_ms - data.progress_ms;
-            const progressDelta = Math.abs(data.progress_ms - (lastProgressMsRef.current + 2000));
-            const userSeeked = progressDelta > 3000;
-            const needsScheduling = scheduledTrackIdRef.current !== data.item.id || userSeeked;
-
-            if (remainingMs > 500 && remainingMs < 600000 && needsScheduling) {
-              scheduledTrackIdRef.current = data.item.id;
-              lastProgressMsRef.current = data.progress_ms;
-
-              const targetMs = Math.max(0, remainingMs - 300);
-              logger.add('info', `Scheduling PWA Worker countdown: ${Math.round(remainingMs / 1000)}s remaining for "${data.item.name}"`);
-
-              // Schedule on unthrottled Web Worker thread
-              if (pwaWorkerRef.current) {
-                pwaWorkerRef.current.postMessage({
-                  command: 'schedule',
-                  targetTimeMs: Date.now() + targetMs,
-                  trackId: data.item.id
-                });
-              }
-
-              // Main-thread fallback
-              if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
-              transitionTimerRef.current = setTimeout(async () => {
-                logger.add('event', `Precision track end timer fired for "${data.item.name}"!`);
-                await pausePlayback();
-                await triggerRadioHostAndSkip();
-              }, targetMs);
-            }
-          }
-
-          if (data.item.name && data.item.name !== currentTrackNameRef.current) {
-            logger.add('event', `Spotify track changed: "${currentTrackNameRef.current}" -> "${data.item.name}"`);
-            if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
-            if (pwaWorkerRef.current) pwaWorkerRef.current.postMessage({ command: 'cancel' });
-            currentTrackNameRef.current = data.item.name;
-            onPlayerChange(data.item, { current: { pause: pausePlayback, resume: resumePlayback } });
-          }
-        }
-      } catch (err) {}
-    };
-
-    pollSpotifyState();
-    pollIntervalRef.current = setInterval(pollSpotifyState, 2000);
-
     return () => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
       if (pwaWorkerRef.current) pwaWorkerRef.current.postMessage({ command: 'cancel' });
     };
 
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Generate AI Host announcement texts for visual UI cards
   useEffect(() => {
     const getRadioTexts = async (tracks: Track[]) => {
-      const radioText = await generate_queue_texts(tracks, pastTransitions.current);
-      if (radioText && radioText.text && radioText.beforeTrackId) {
-        // Prevent duplicate radio items for the same track ID
-        const isDuplicate = radioItemsRef.current.some(item => item.beforeTrackId === radioText.beforeTrackId);
-        if (!isDuplicate) {
-          const nextTrack = tracks[1];
-          if (nextTrack) {
-            pastTransitions.current.push({
-              song: nextTrack.name,
-              artist: nextTrack.artists.map((a: any) => a.name).join(", "),
-              text: radioText.text
-            });
-            if (pastTransitions.current.length > 5) {
-              pastTransitions.current.shift();
+      // 1. Check if Pair 1 target track is an EVEN song in station count!
+      const targetTrack1 = tracks[1];
+      if (targetTrack1) {
+        const targetIndexInQueue = queue.findIndex(t => t.id === targetTrack1.id);
+        const songNum1 = (songCounterRef.current) + 1 + (targetIndexInQueue > -1 ? targetIndexInQueue : 0);
+        if (songNum1 % 2 === 0) {
+          const radioText1 = await generate_queue_texts(tracks, pastTransitions.current);
+          if (radioText1 && radioText1.text && radioText1.beforeTrackId) {
+            const isDup1 = radioItemsRef.current.some(item => item.beforeTrackId === radioText1.beforeTrackId);
+            if (!isDup1) {
+              const item1: RadioItem = {
+                text: radioText1.text,
+                beforeTrackId: radioText1.beforeTrackId,
+                audio: null,
+                status: 'synthesizing'
+              };
+              radioItemsRef.current = [...radioItemsRef.current, item1];
+              setRadioItems([...radioItemsRef.current]);
+
+              setTimeout(() => {
+                radioItemsRef.current = radioItemsRef.current.map(item =>
+                  item.beforeTrackId === radioText1.beforeTrackId ? { ...item, status: 'ready' } : item
+                );
+                setRadioItems([...radioItemsRef.current]);
+              }, 2500);
             }
           }
-
-          const newRadioItems = [...radioItemsRef.current, radioText];
-          const newTextToAudioQueue = [...radioTextToAudioQueue, {text: radioText.text, beforeTrackId: radioText.beforeTrackId}];
-          setRadioTextToAudioQueue(newTextToAudioQueue);
-          radioTextToAudioQueueRef.current = newTextToAudioQueue;
-          radioItemsRef.current = newRadioItems;
-          setRadioItems(newRadioItems);
         }
       }
-    }
+
+      // 2. Check if Pair 2 target track (queue[2]) is an EVEN song in station count!
+      if (queue.length >= 3) {
+        const targetTrack2 = queue[2];
+        if (targetTrack2) {
+          const songNum2 = (songCounterRef.current) + 1 + 2;
+          if (songNum2 % 2 === 0) {
+            const pair2 = [queue[1], queue[2]];
+            const radioText2 = await generate_queue_texts(pair2, pastTransitions.current);
+            if (radioText2 && radioText2.text && radioText2.beforeTrackId) {
+              const isDup2 = radioItemsRef.current.some(item => item.beforeTrackId === radioText2.beforeTrackId);
+              if (!isDup2) {
+                const item2: RadioItem = {
+                  text: radioText2.text,
+                  beforeTrackId: radioText2.beforeTrackId,
+                  audio: null,
+                  status: 'synthesizing'
+                };
+                radioItemsRef.current = [...radioItemsRef.current, item2];
+                setRadioItems([...radioItemsRef.current]);
+
+                setTimeout(() => {
+                  radioItemsRef.current = radioItemsRef.current.map(item =>
+                    item.beforeTrackId === radioText2.beforeTrackId ? { ...item, status: 'ready' } : item
+                  );
+                  setRadioItems([...radioItemsRef.current]);
+                }, 3500);
+              }
+            }
+          }
+        }
+      }
+    };
     if (fetchingRadioFor.length > 0) {
       getRadioTexts(fetchingRadioFor);
     }
-  }, [fetchingRadioFor]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    const getAudio = async (radioText: {text: string, beforeTrackId: string}) => {
-      logger.add('info', `Synthesizing Kokoro TTS audio for: "${radioText.text}"...`);
-      const audio = await generate_queue_audio(radioText.text);
-      if (audio) {
-        logger.add('event', "Kokoro TTS audio voice synthesized successfully! (WAV ready)");
-      } else {
-        logger.add('error', "Kokoro TTS audio synthesis returned null - check Modal backend");
-      }
-      const newRadioItems = [...radioItemsRef.current];
-      const radioItemToUpdateIndex = newRadioItems.findIndex((radioItem) => radioItem.beforeTrackId === radioText.beforeTrackId);
-      if (radioItemToUpdateIndex > -1) {
-        newRadioItems[radioItemToUpdateIndex] = {...newRadioItems[radioItemToUpdateIndex], audio: audio};
-      }
-      setRadioItems(newRadioItems);
-      radioItemsRef.current = newRadioItems;
-      const newTextToAudioQueue = radioTextToAudioQueueRef.current.slice(1);
-      setRadioTextToAudioQueue(newTextToAudioQueue);
-      radioTextToAudioQueueRef.current = newTextToAudioQueue;
-      setGeneratingAudio(false);
-    }
-    if(radioTextToAudioQueue.length > 0 && !generatingAudio) {
-      setGeneratingAudio(true);
-      getAudio(radioTextToAudioQueue[0]);
-    }
-
-  }, [radioTextToAudioQueue, generatingAudio]);
-
-
-  useEffect(() => {
-    if (fetchedNewRadioItems) {
-      setFetchedNewRadioItems(false);
-      
-      if (queue.length < 3) return;
-
-      let newFetchingRadioFor: Track[] = [];
-
-      // Determine next even target index k (2, 4, 6, 8...)
-      const existingTargetIds = radioItemsRef.current.map(item => item.beforeTrackId);
-      
-      let nextTargetIndex = -1;
-      for (let k = 2; k < queue.length; k += 2) {
-        if (!existingTargetIds.includes(queue[k].id)) {
-          nextTargetIndex = k;
-          break;
-        }
-      }
-
-      if (nextTargetIndex > 0 && nextTargetIndex < queue.length) {
-        // Transition between queue[nextTargetIndex - 1] and queue[nextTargetIndex]
-        newFetchingRadioFor = [queue[nextTargetIndex - 1], queue[nextTargetIndex]];
-        logger.add('info', `Queueing AI host transition for target index ${nextTargetIndex} ("${newFetchingRadioFor[0].name}" -> "${newFetchingRadioFor[1].name}")`);
-        setFetchingRadioFor(newFetchingRadioFor);
-      }
-    }
-  }, [fetchedNewRadioItems]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchingRadioFor, queue]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pauseSong = async (player: any) => {
     try {
@@ -389,8 +323,6 @@ function App() {
     } else {
       logger.add('info', `No matching radio host announcement for: "${track.name}" (Target ID: ${track.id})`);
     }
-
-    setFetchedNewRadioItems(true);
   }
 
   const triggerRadioHostAndSkip = async () => {
@@ -411,11 +343,12 @@ function App() {
     
     logger.add('info', "Host speech finished! Skipping to next song...");
     await skipToNext();
-    setFetchedNewRadioItems(true);
   }
 
+  const lastRadioTrackPairRef = useRef<string>("");
+
   const getQueue = async () => {
-    logger.add('info', "Fetching user queue from Spotify API...");
+    logger.add('info', "[STATE] Fetching initial user queue from Spotify API...");
     const res = await getUserQueue();
     if (!res || !res.queue || res.queue.length === 0 || !('album' in res.queue[0])) {
       logger.add('warn', "Queue returned empty or non-music tracks from Spotify API");
@@ -425,17 +358,62 @@ function App() {
     const uniqueTracks = res.queue.filter((track: Track, index: number, self: Track[]) =>
       index === self.findIndex((t) => t.id === track.id)
     );
-    logger.add('event', `Queue updated: ${uniqueTracks.length} tracks. Now playing: "${uniqueTracks[0]?.name}"`);
-    setQueue(uniqueTracks);
-    setFetchedNewRadioItems(true);
+    
+    // Set initial station state ONCE
+    if (!currentTrackRef.current) {
+      setCurrentTrack(uniqueTracks[0]);
+      setQueue(uniqueTracks.slice(1));
+    } else {
+      setQueue(uniqueTracks.slice(1));
+    }
+
+    if (uniqueTracks.length >= 2) {
+      const pairId = `${uniqueTracks[0].id}_${uniqueTracks[1].id}`;
+      if (pairId !== lastRadioTrackPairRef.current) {
+        lastRadioTrackPairRef.current = pairId;
+        logger.add('event', `[STATE] Station Queue Initialized: ${uniqueTracks.length} tracks. Now playing: "${uniqueTracks[0]?.name}"`);
+        setFetchingRadioFor(uniqueTracks.slice(0, 2));
+      }
+    }
     return uniqueTracks;
   }
+
+  const songCounterRef = useRef<number>(1);
+
+  const advanceToNextTrack = () => {
+    if (queue.length > 0) {
+      const nextTrack = queue[0];
+      const newQueue = queue.slice(1);
+      songCounterRef.current += 1;
+      
+      // Strict 2-song cadence: DJ host speaks every 2 songs (Song 2, Song 4, Song 6...)
+      const isHostTurn = (songCounterRef.current % 2 === 0);
+      logger.add('event', `[STATION] Advancing to Track #${songCounterRef.current}: "${nextTrack.name}" | DJ Host Interlude: ${isHostTurn ? "YES 🎙️" : "NO 🎵"}`);
+      
+      const prevTrack = currentTrackRef.current || nextTrack;
+      setCurrentTrack(nextTrack);
+      setQueue(newQueue);
+      
+      // Remove ONLY old/expired radio items for previous tracks that are done!
+      // KEEP radio item for nextTrack so WebPlayback can attach hostText to stream URL!
+      const updatedRadioItems = radioItemsRef.current.filter(item => item.beforeTrackId !== prevTrack.id);
+      radioItemsRef.current = updatedRadioItems;
+      setRadioItems(updatedRadioItems);
+      
+      if (isHostTurn && newQueue.length > 0) {
+        setFetchingRadioFor([prevTrack, nextTrack]);
+      }
+    }
+  };
 
   const sdkPlayerStarted = async (player: any) => {
     const newQueue = await getQueue();
     if (newQueue && newQueue.length > 0) {
-      setQueue(newQueue as Track[]);
-      setFetchingRadioFor(newQueue.slice(0, Math.min(2, newQueue.length)));
+      setCurrentTrack(newQueue[0] as Track);
+      setQueue(newQueue.slice(1) as Track[]);
+      if (newQueue.length >= 2) {
+        setFetchingRadioFor(newQueue.slice(0, 2) as Track[]);
+      }
     }
   }
 
@@ -443,7 +421,7 @@ function App() {
     if (queue.length > 0) {
       const renderList: (RadioItem | Track)[] = [...queue];
 
-      // Insert radio transition cards directly before their target track ID
+      // Insert radio transition cards directly before their target track ID if present in remaining queue
       for (let i = 0; i < radioItems.length; i++) {
         const radioItem = radioItems[i];
         const index = renderList.findIndex((item) => 'name' in item && item.id === radioItem.beforeTrackId);
@@ -453,10 +431,12 @@ function App() {
       }
 
       return renderList.map((elem, idx) => {
-        if ('album' in elem)
-          return <SongCard song={elem} key={elem.id + "_" + idx} />;
-        else
+        if ('album' in elem) {
+          const isPreCached = idx <= 3;
+          return <SongCard song={elem} isPreCached={isPreCached} key={elem.id + "_" + idx} />;
+        } else {
           return <RadioItemCard radioItem={elem} key={(elem as RadioItem).beforeTrackId + "_radio_" + idx} />;
+        }
       });
     }
     return null;
@@ -500,6 +480,7 @@ function App() {
             onPlayerChange={onPlayerChange}
             sdkPlayerStarted={sdkPlayerStarted}
             triggerRadioHostAndSkip={triggerRadioHostAndSkip}
+            advanceToNextTrack={advanceToNextTrack}
             currentTrack={currentTrack}
             queue={queue}
           />

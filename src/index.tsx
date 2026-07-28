@@ -17,24 +17,33 @@ root.render(
 );
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js').then(registration => {
-      console.log('ServiceWorker registration successful with scope: ', registration.scope);
-      registration.onupdatefound = () => {
-        const installingWorker = registration.installing;
-        if (installingWorker) {
-          installingWorker.onstatechange = () => {
-            if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              console.log('New PWA version detected. Auto-reloading for latest update...');
-              window.location.reload();
-            }
-          };
-        }
-      };
-    }).catch(error => {
-      console.log('ServiceWorker registration failed: ', error);
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    navigator.serviceWorker.getRegistrations().then(registrations => {
+      for (let registration of registrations) {
+        registration.unregister();
+        console.log('Unregistered local development ServiceWorker:', registration.scope);
+      }
     });
-  });
+  } else {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/service-worker.js').then(registration => {
+        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+        registration.onupdatefound = () => {
+          const installingWorker = registration.installing;
+          if (installingWorker) {
+            installingWorker.onstatechange = () => {
+              if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                console.log('New PWA version detected. Auto-reloading for latest update...');
+                window.location.reload();
+              }
+            };
+          }
+        };
+      }).catch(error => {
+        console.log('ServiceWorker registration failed: ', error);
+      });
+    });
+  }
 }
 
 // If you want to start measuring performance in your app, pass a function
