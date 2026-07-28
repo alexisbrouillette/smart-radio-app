@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Button, IconButton, Flex, Text } from '@chakra-ui/react';
 import { pausePlayback, resumePlayback, skipToNext, skipToPrevious } from '../network/spotify';
 import "./style.css";
@@ -20,6 +20,56 @@ const defaultTrack = {
 function WebPlayback(props) {
     const [isPlaying, setIsPlaying] = useState(true);
     const streamAudioRef = useRef(null);
+    const transitioningRef = useRef(false);
+    const [exactSegmentSec, setExactSegmentSec] = useState(0);
+
+    const current_track = props.currentTrack || defaultTrack;
+
+    useEffect(() => {
+        let isMounted = true;
+        const fetchExactDuration = async () => {
+            if (!current_track.name) return;
+            const trackName = current_track.name + " " + (current_track.artists[0]?.name || "");
+            const activeRadioItem = (props.radioItems && props.radioItems.length > 0) 
+                ? props.radioItems.find(item => item.beforeTrackId === current_track.id)
+                : null;
+
+            const songSec = (current_track.duration_ms || 180000) / 1000;
+            const hostSpeechSec = activeRadioItem ? 10 : 0;
+            const defaultLimit = songSec + hostSpeechSec;
+
+            const API_BASE = process.env.REACT_APP_API_SERVER || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'https://127.0.0.1:8000' : 'https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run');
+            
+            try {
+                const url = `${API_BASE}/stream/duration?track=${encodeURIComponent(trackName)}${activeRadioItem ? `&hostText=${encodeURIComponent(activeRadioItem.text)}` : ''}`;
+                const res = await fetch(url);
+                const data = await res.json();
+                if (isMounted && data.total_segment_sec > 60) {
+                    console.log(`⏱️ [EXACT DURATION API] Received exact segment length: ${data.total_segment_sec.toFixed(2)}s`);
+                    setExactSegmentSec(data.total_segment_sec);
+                    return;
+                }
+            } catch (e) {}
+
+            if (isMounted) {
+                console.log(`⏱️ [SPOTIFY DURATION FALLBACK] Using Spotify duration: ${defaultLimit.toFixed(1)}s (Song: ${songSec.toFixed(1)}s + Speech: ${hostSpeechSec}s)`);
+                setExactSegmentSec(defaultLimit);
+            }
+        };
+        fetchExactDuration();
+        return () => { isMounted = false; };
+    }, [current_track, props.radioItems]);
+
+    useEffect(() => {
+        transitioningRef.current = true;
+        if (streamAudioRef.current) {
+            try { streamAudioRef.current.currentTime = 0; } catch (e) {}
+        }
+        const timer = setTimeout(() => {
+            transitioningRef.current = false;
+        }, 5000);
+        return () => clearTimeout(timer);
+    }, [current_track.id]);
 
     const requestWakeLock = async () => {
         try {
@@ -106,7 +156,6 @@ function WebPlayback(props) {
         requestWakeLock();
     }
 
-    const current_track = props.currentTrack || defaultTrack;
     const is_active = !!props.currentTrack;
 
     const startRadio = async () => {
@@ -148,35 +197,15 @@ function WebPlayback(props) {
 
     if (!is_active) { 
         return (
-            <div className="glass-panel player-container">
-                <div style={{ padding: '16px 8px', display: 'flex', flexDirection: 'column', gap: '24px', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-                        <div style={{ fontSize: '3rem', animation: 'pulse 2s infinite' }}>🎙️</div>
-                        <h2 style={{ fontSize: '1.6rem', fontWeight: 800, color: 'white', margin: 0 }}>Smart Radio Host</h2>
-                        <p style={{ color: '#a7a7a7', fontSize: '0.95rem', maxWidth: '380px', margin: '0 auto', lineHeight: '1.6', textAlign: 'center' }}>
-                            Experience your music hosted by a smart generative AI host, weaving natural trivia and song meaning.
-                        </p>
-                    </div>
-
-                    <div style={{ background: 'rgba(29, 185, 84, 0.05)', border: '1px solid rgba(29, 185, 84, 0.15)', padding: '16px 20px', borderRadius: '16px', textAlign: 'left', maxWidth: '400px' }}>
-                        <h4 style={{ color: '#1DB954', fontWeight: 800, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 8px 0' }}>Quick setup:</h4>
-                        <ol style={{ color: '#d1d1d6', margin: 0, paddingLeft: '20px', fontSize: '0.85rem', display: 'flex', flexDirection: 'column', gap: '8px', lineHeight: '1.4' }}>
-                            <li>Open Spotify on your phone or computer.</li>
-                            <li>Start playing any song/playlist.</li>
-                            <li>Click the button below to connect the AI host!</li>
-                        </ol>
-                    </div>
-
-                    <Button
-                        size="lg"
-                        backgroundColor="#1DB954"
-                        color="black"
-                        _hover={{ backgroundColor: '#1ed760', transform: 'scale(1.05)' }}
-                        _active={{ transform: 'scale(0.98)' }}
-                        transition="all 0.2s"
-                        borderRadius="full"
-                        px="8"
-                        py="6"
+            <div className="glass-panel player-container" style={{ textAlign: 'center', padding: '40px 20px' }}>
+                <Text fontSize="1.2rem" fontWeight="600" color="#f1f5f9" mb="20px">
+                    📻 Smart AI Radio Station Ready
+                </Text>
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    <Button 
+                        colorScheme="whatsapp" 
+                        size="lg" 
+                        borderRadius="full" 
                         fontWeight="800"
                         onClick={() => startRadio()}>
                         Connect AI Host
@@ -223,6 +252,24 @@ function WebPlayback(props) {
                             controls 
                             autoPlay 
                             src={streamUrl} 
+                            onTimeUpdate={(e) => {
+                                const audio = e.currentTarget;
+                                const songSec = (current_track.duration_ms || 180000) / 1000;
+                                const hostSpeechSec = activeRadioItem ? 10 : 0;
+                                const fallbackLimit = songSec + hostSpeechSec;
+
+                                const targetLimit = (exactSegmentSec > 60) ? exactSegmentSec : fallbackLimit;
+
+                                if (audio.currentTime >= targetLimit && audio.currentTime > (targetLimit - 5) && !transitioningRef.current) {
+                                    transitioningRef.current = true;
+                                    console.log(`⏱️ [EXACT STREAM UI SYNC] Segment limit reached (${audio.currentTime.toFixed(1)}s / ${targetLimit.toFixed(1)}s). Advancing UI to next track!`);
+                                    logger.add('event', `[EXACT STREAM UI SYNC] Segment finished (${targetLimit.toFixed(1)}s). Advancing frontend UI state...`);
+                                    if (props.advanceToNextTrack) {
+                                        props.advanceToNextTrack();
+                                    }
+                                    setTimeout(() => { transitioningRef.current = false; }, 3000);
+                                }
+                            }}
                             onPlay={() => console.log("🔊 [AUDIO DEVTOOLS LOG] Stream started playing:", streamUrl)}
                             onPause={() => console.log("⏸️ [AUDIO DEVTOOLS LOG] Stream paused")}
                             onEnded={() => {

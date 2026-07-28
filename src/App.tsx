@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import './App.css';
 import { Button, Stack } from '@chakra-ui/react';
 import { currentToken, redirectToSpotifyAuthorize } from './spotifyTokenHandling';
-import { getToken, getUserQueue, generate_queue_texts, getTokenFromrefreshToken, skipToNext, getCurrentlyPlaying, pausePlayback, resumePlayback } from './network/spotify';
+import { getToken, getUserQueue, generate_queue_texts, getTokenFromrefreshToken, skipToNext } from './network/spotify';
 import { SongCard } from './songCard';
 
 import { Track } from "@spotify/web-api-ts-sdk";
@@ -78,6 +78,27 @@ function App() {
     currentTrackRef.current = track;
     setCurrentTrackState(track);
   };
+
+  const [cachedTrackNames, setCachedTrackNames] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (queue.length === 0) return;
+    const fetchCacheStatus = async () => {
+      const trackQuery = queue.slice(0, 4).map(t => `${t.name} ${t.artists[0]?.name || ''}`).join(',');
+      const API_BASE = process.env.REACT_APP_API_SERVER || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'https://127.0.0.1:8000' : 'https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run');
+      try {
+        const res = await fetch(`${API_BASE}/cache/status?tracks=${encodeURIComponent(trackQuery)}`);
+        const data = await res.json();
+        if (data.cached_tracks) {
+          setCachedTrackNames(data.cached_tracks);
+        }
+      } catch (e) {}
+    };
+
+    fetchCacheStatus();
+    const interval = setInterval(fetchCacheStatus, 4000);
+    return () => clearInterval(interval);
+  }, [queue]);
 
   const currentTrackNameRef = useRef<string>("");
   const pollIntervalRef = useRef<any>(null);
@@ -432,7 +453,8 @@ function App() {
 
       return renderList.map((elem, idx) => {
         if ('album' in elem) {
-          const isPreCached = idx <= 3;
+          const fullTrackQuery = `${elem.name} ${elem.artists[0]?.name || ''}`;
+          const isPreCached = cachedTrackNames.includes(fullTrackQuery);
           return <SongCard song={elem} isPreCached={isPreCached} key={elem.id + "_" + idx} />;
         } else {
           return <RadioItemCard radioItem={elem} key={(elem as RadioItem).beforeTrackId + "_radio_" + idx} />;
