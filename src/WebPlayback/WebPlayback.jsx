@@ -44,24 +44,41 @@ function WebPlayback(props) {
     const [isPlaying, setIsPlaying] = useState(true);
     const streamAudioRef = useRef(null);
     const transitioningRef = useRef(false);
-    const [exactSegmentSec, setExactSegmentSec] = useState(0);
     // Track the current stream URL in a ref so it's stable across renders
     const sessionStreamUrlRef = useRef('');
     const [sessionStreamUrl, setSessionStreamUrl] = useState('');
 
     const current_track = props.currentTrack || defaultTrack;
 
-    const hasAdvancedMidStreamRef = useRef(false);
+    const segmentIndexRef = useRef(0);
+    const cumulativeBoundariesRef = useRef([]);
 
-    // ── Core imperative function: load a new track into the audio element ──
-    // Called on initial start, manual skip, or stream end (onEnded).
+    // ── Core imperative function: load a new track stream into the audio element ──
     const loadTrackIntoStream = useCallback((track, queue, radioItems) => {
         if (!track || !track.name) return;
-        hasAdvancedMidStreamRef.current = false;
+        segmentIndexRef.current = 0;
+        
+        // Calculate cumulative segment boundaries for all tracks in this stream session
+        const allTracks = [track];
+        if (queue && Array.isArray(queue)) {
+            allTracks.push(...queue);
+        }
+
+        let runningTotal = 0;
+        const boundaries = allTracks.map((trk) => {
+            const songSec = (trk.duration_ms || 180000) / 1000;
+            const activeRadio = radioItems && radioItems.find(item => item.beforeTrackId === trk.id);
+            const speechSec = activeRadio ? 10 : 0;
+            runningTotal += (songSec + speechSec);
+            return runningTotal;
+        });
+
+        cumulativeBoundariesRef.current = boundaries;
+
         const url = buildStreamUrl(track, queue, radioItems);
         sessionStreamUrlRef.current = url;
         setSessionStreamUrl(url);
-        logger.add('info', `📻 [STREAM SEGMENT LOAD] Loading stream for: "${track.name}"`);
+        logger.add('info', `📻 [CONTINUOUS STREAM LOAD] Loading stream for: "${track.name}" with ${queue?.length || 0} queued tracks. Total calculated stream boundaries: ${boundaries.length}`);
 
         const audio = streamAudioRef.current;
         if (audio) {
@@ -81,39 +98,7 @@ function WebPlayback(props) {
         }
     }, [props.currentTrack, props.queue, props.radioItems, loadTrackIntoStream]);
 
-    // ── Fetch exact segment duration from server for this track ──
-    useEffect(() => {
-        let isMounted = true;
-        const fetchExactDuration = async () => {
-            if (!current_track.name) return;
-            const trackName = current_track.name + " " + (current_track.artists[0]?.name || "");
-            const activeRadioItem = (props.radioItems && props.radioItems.length > 0)
-                ? props.radioItems.find(item => item.beforeTrackId === current_track.id)
-                : null;
 
-            const songSec = (current_track.duration_ms || 180000) / 1000;
-            const hostSpeechSec = activeRadioItem ? 10 : 0;
-            const defaultLimit = songSec + hostSpeechSec;
-
-            try {
-                const url = `${API_BASE}/stream/duration?track=${encodeURIComponent(trackName)}${activeRadioItem ? `&hostText=${encodeURIComponent(activeRadioItem.text)}` : ''}`;
-                const res = await fetch(url, { headers: { 'ngrok-skip-browser-warning': 'true' } });
-                const data = await res.json();
-                if (isMounted && data.total_segment_sec > 60) {
-                    logger.add('info', `⏱️ [EXACT DURATION] ${data.total_segment_sec.toFixed(2)}s for "${current_track.name}"`);
-                    setExactSegmentSec(data.total_segment_sec);
-                    return;
-                }
-            } catch (e) {}
-
-            if (isMounted) {
-                logger.add('info', `⏱️ [SPOTIFY DURATION FALLBACK] Using Spotify duration: ${defaultLimit.toFixed(1)}s (Song: ${songSec.toFixed(1)}s + Speech: ${hostSpeechSec}s)`);
-                setExactSegmentSec(defaultLimit);
-            }
-        };
-        fetchExactDuration();
-        return () => { isMounted = false; };
-    }, [current_track, props.radioItems]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ── Update MediaSession lock screen metadata when track changes ──
     useEffect(() => {
@@ -269,10 +254,6 @@ function WebPlayback(props) {
             </div>
         );
     } else {
-        const activeRadioItem = (props.radioItems && props.radioItems.length > 0)
-            ? props.radioItems.find(item => item.beforeTrackId === current_track.id)
-            : null;
-
         return (
             <div className="glass-panel player-container">
                 <img src={current_track.album.images[0]?.url} className="now-playing__cover" alt="Album Cover" />
@@ -297,42 +278,33 @@ function WebPlayback(props) {
                             }}
                             onTimeUpdate={(e) => {
                                 const audio = e.currentTarget;
-                                const songSec = (current_track.duration_ms || 180000) / 1000;
-                                const hostSpeechSec = activeRadioItem ? 10 : 0;
-                                const fallbackLimit = songSec + hostSpeechSec;
-                                const targetLimit = (exactSegmentSec > 60) ? exactSegmentSec : fallbackLimit;
+                                const currentTime = audio.currentTime;
+                                const boundaries = cumulativeBoundariesRef.current;
+                                const currentIdx = segmentIndexRef.current;
 
                                 // Log progress every ~15 seconds
-                                const roundedTime = Math.floor(audio.currentTime);
+                                const roundedTime = Math.floor(currentTime);
                                 if (roundedTime > 0 && roundedTime % 15 === 0 && (audio.dataset.lastLoggedTime !== String(roundedTime))) {
                                     audio.dataset.lastLoggedTime = String(roundedTime);
-                                    logger.add('info', `⏱️ [STREAM PROGRESS] ${audio.currentTime.toFixed(0)}s / ${targetLimit.toFixed(0)}s | Playing: "${current_track.name}"`);
+                                    const nextBoundary = boundaries[currentIdx] || 0;
+                                    logger.add('info', `⏱️ [STREAM PROGRESS] ${currentTime.toFixed(0)}s (Next boundary: ${nextBoundary.toFixed(0)}s) | Segment #${currentIdx + 1}`);
                                 }
 
-                                // Auto-advance UI mid-stream ONCE when Segment A finishes (Song A → Song B transition).
-                                // Stream continues seamlessly without src reload.
-                                if (audio.currentTime >= targetLimit && !hasAdvancedMidStreamRef.current && !transitioningRef.current) {
-                                    hasAdvancedMidStreamRef.current = true;
+                                // Advance UI card whenever stream audio reaches next track boundary
+                                if (currentIdx < boundaries.length && currentTime >= boundaries[currentIdx] && !transitioningRef.current) {
                                     transitioningRef.current = true;
-                                    logger.add('event', `⏱️ [MID-STREAM UI ADVANCE] Segment A limit (${audio.currentTime.toFixed(1)}s / ${targetLimit.toFixed(1)}s). Advancing UI to Song B.`);
+                                    segmentIndexRef.current += 1;
+                                    logger.add('event', `⏱️ [UI SYNC ADVANCE] Audio reached boundary #${currentIdx + 1} (${currentTime.toFixed(1)}s / ${boundaries[currentIdx].toFixed(1)}s). Advancing UI card.`);
                                     if (props.advanceToNextTrack) {
                                         props.advanceToNextTrack();
                                     }
                                     setTimeout(() => { transitioningRef.current = false; }, 4000);
                                 }
                             }}
-                            onPlay={() => logger.add('info', `🔊 [STREAM PLAYING] Started: "${current_track.name}"`)}
+                            onPlay={() => logger.add('info', `🔊 [STREAM PLAYING] Started continuous broadcast`)}
                             onPause={() => logger.add('warn', `⏸️ [STREAM PAUSED] Paused at: ${streamAudioRef.current?.currentTime?.toFixed(1)}s`)}
                             onEnded={() => {
-                                logger.add('event', `🏁 [STREAM ENDED] Stream segment finished. Loading next track stream...`);
-                                const nextTrack = props.queue && props.queue.length > 0 ? props.queue[0] : null;
-                                const newQueue = props.queue && props.queue.length > 1 ? props.queue.slice(1) : [];
-                                if (props.advanceToNextTrack) {
-                                    props.advanceToNextTrack();
-                                }
-                                if (nextTrack) {
-                                    loadTrackIntoStream(nextTrack, newQueue, props.radioItems);
-                                }
+                                logger.add('event', `🏁 [STREAM ENDED] Full queue stream finished.`);
                             }}
                             onError={(e) => {
                                 const errObj = e.currentTarget.error;
