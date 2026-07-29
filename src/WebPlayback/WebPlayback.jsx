@@ -22,8 +22,39 @@ function WebPlayback(props) {
     const streamAudioRef = useRef(null);
     const transitioningRef = useRef(false);
     const [exactSegmentSec, setExactSegmentSec] = useState(0);
+    const [sessionStreamUrl, setSessionStreamUrl] = useState('');
 
     const current_track = props.currentTrack || defaultTrack;
+
+    // Initialize the single continuous audio stream URL ONCE for the session
+    useEffect(() => {
+        if (props.currentTrack && !sessionStreamUrl) {
+            const nextTrackItem = (props.queue && props.queue.length > 0) ? props.queue[0] : null;
+            const thirdTrackItem = (props.queue && props.queue.length > 1) ? props.queue[1] : null;
+
+            const nextTrackParam = nextTrackItem 
+                ? `&nextTrack=${encodeURIComponent(nextTrackItem.name + " " + (nextTrackItem.artists[0]?.name || ""))}`
+                : '';
+
+            const thirdTrackParam = thirdTrackItem 
+                ? `&thirdTrack=${encodeURIComponent(thirdTrackItem.name + " " + (thirdTrackItem.artists[0]?.name || ""))}`
+                : '';
+
+            const activeRadioItem = (props.radioItems && props.radioItems.length > 0) 
+                ? props.radioItems.find(item => item.beforeTrackId === props.currentTrack.id)
+                : null;
+            const hostTextParam = activeRadioItem
+                ? `&hostText=${encodeURIComponent(activeRadioItem.text)}`
+                : '';
+
+            const trackParam = `track=${encodeURIComponent(props.currentTrack.name + " " + (props.currentTrack.artists[0]?.name || ""))}`;
+            const API_BASE = process.env.REACT_APP_API_SERVER || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'https://127.0.0.1:8000' : 'https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run');
+
+            const url = `${API_BASE}/stream/live.mp3?ngrok-skip-browser-warning=true&${trackParam}${nextTrackParam}${thirdTrackParam}${hostTextParam}`;
+            setSessionStreamUrl(url);
+            logger.add('info', `📻 Initialized Continuous Session Audio Stream: ${url}`);
+        }
+    }, [props.currentTrack, props.queue, props.radioItems, sessionStreamUrl]);
 
     useEffect(() => {
         let isMounted = true;
@@ -62,21 +93,25 @@ function WebPlayback(props) {
         return () => { isMounted = false; };
     }, [current_track, props.radioItems]);
 
+    // Update MediaSession metadata & UI state without touching audio element src
     useEffect(() => {
         transitioningRef.current = true;
-        logger.add('event', `[TRACK TRANSITION] Transitioning to track: "${current_track.name}"`);
-        if (streamAudioRef.current) {
-            try { 
-                if (isPlaying) {
-                    streamAudioRef.current.play().catch(e => logger.add('warn', `Track transition play error: ${e.message}`));
-                }
-            } catch (e) {}
+        logger.add('event', `[TRACK UI ADVANCE] Advanced UI to: "${current_track.name}". Stream continues seamlessly.`);
+        
+        if ('mediaSession' in navigator && current_track.name) {
+            navigator.mediaSession.metadata = new window.MediaMetadata({
+                title: current_track.name,
+                artist: current_track.artists[0]?.name || "Smart Radio Host",
+                album: "Smart Radio Station",
+                artwork: current_track.album?.images?.map(img => ({ src: img.url, sizes: '512x512', type: 'image/jpeg' })) || []
+            });
         }
+
         const timer = setTimeout(() => {
             transitioningRef.current = false;
         }, 5000);
         return () => clearTimeout(timer);
-    }, [current_track.id, current_track.name, isPlaying]);
+    }, [current_track.id, current_track.name]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const requestWakeLock = async () => {
         try {
@@ -243,7 +278,8 @@ function WebPlayback(props) {
 
         const API_BASE = process.env.REACT_APP_API_SERVER || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'https://127.0.0.1:8000' : 'https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run');
 
-        const streamUrl = `${API_BASE}/stream/live.mp3?ngrok-skip-browser-warning=true&${trackParam}${nextTrackParam}${thirdTrackParam}${hostTextParam}`;
+        const fallbackStreamUrl = `${API_BASE}/stream/live.mp3?ngrok-skip-browser-warning=true&${trackParam}${nextTrackParam}${thirdTrackParam}${hostTextParam}`;
+        const activeStreamUrl = sessionStreamUrl || fallbackStreamUrl;
 
         return (
             <div className="glass-panel player-container">
@@ -258,7 +294,7 @@ function WebPlayback(props) {
                             ref={streamAudioRef}
                             controls 
                             autoPlay 
-                            src={streamUrl} 
+                            src={activeStreamUrl} 
                             onCanPlay={() => {
                                 logger.add('info', `🎵 [AUDIO CAN PLAY] Stream ready for: "${current_track.name}"`);
                                 if (isPlaying && streamAudioRef.current && streamAudioRef.current.paused) {
