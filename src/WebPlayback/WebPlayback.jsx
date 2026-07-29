@@ -55,24 +55,23 @@ function WebPlayback(props) {
     const current_track = props.currentTrack || defaultTrack;
 
     // ── Core imperative function: load a new track into the audio element ──
-    // Called on: initial session start, manual skip, auto-advance from onTimeUpdate.
+    // Called ONLY on manual skip (user gesture) — never on auto-advance.
+    // iOS/Android allow src change + play() from a user gesture even in background.
     const loadTrackIntoStream = useCallback((track, queue, radioItems) => {
         if (!track || !track.name) return;
         const url = buildStreamUrl(track, queue, radioItems);
-        if (url === sessionStreamUrlRef.current) {
-            logger.add('warn', `[STREAM] Skipping reload — same URL already active`);
-            return;
-        }
         sessionStreamUrlRef.current = url;
         setSessionStreamUrl(url);
-        logger.add('info', `📻 [STREAM LOAD] Loading track: "${track.name}" → ${url}`);
+        logger.add('info', `⏭️ [MANUAL SKIP STREAM] Loading: "${track.name}"`);
 
         const audio = streamAudioRef.current;
         if (audio) {
             audio.src = url;
-            audio.load();
+            // Ignore AbortError — onCanPlay handler will retry play() when buffer is ready
             audio.play().catch(err => {
-                logger.add('warn', `▶️ [STREAM PLAY ERR] ${err.name}: ${err.message}`);
+                if (err.name !== 'AbortError') {
+                    logger.add('warn', `▶️ [STREAM PLAY ERR] ${err.name}: ${err.message}`);
+                }
             });
         }
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -312,20 +311,14 @@ function WebPlayback(props) {
                                     logger.add('info', `⏱️ [STREAM PROGRESS] ${audio.currentTime.toFixed(0)}s / ${targetLimit.toFixed(0)}s | Playing: "${current_track.name}"`);
                                 }
 
-                                // Auto-advance UI + reload stream with next track's hostText when segment limit reached
+                                // Auto-advance UI only — DO NOT reload audio.src.
+                                // Server already streams Song A → [host speech] → Song B continuously.
+                                // Changing src in background kills iOS audio session.
                                 if (audio.currentTime >= targetLimit && !transitioningRef.current) {
                                     transitioningRef.current = true;
-                                    logger.add('event', `⏱️ [AUTO ADVANCE] Segment limit reached (${audio.currentTime.toFixed(1)}s / ${targetLimit.toFixed(1)}s). Loading next track with host speech...`);
-                                    
-                                    const nextTrack = props.queue && props.queue.length > 0 ? props.queue[0] : null;
-                                    const newQueue = props.queue && props.queue.length > 1 ? props.queue.slice(1) : [];
-                                    
+                                    logger.add('event', `⏱️ [AUTO ADVANCE] Segment limit (${audio.currentTime.toFixed(1)}s / ${targetLimit.toFixed(1)}s). Advancing UI only — stream continues.`);
                                     if (props.advanceToNextTrack) {
                                         props.advanceToNextTrack();
-                                    }
-                                    // Reload stream to next track — this picks up hostText from radioItems for that track
-                                    if (nextTrack) {
-                                        loadTrackIntoStream(nextTrack, newQueue, props.radioItems);
                                     }
                                     setTimeout(() => { transitioningRef.current = false; }, 4000);
                                 }

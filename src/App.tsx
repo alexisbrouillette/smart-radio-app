@@ -23,16 +23,16 @@ const API_BASE = process.env.REACT_APP_API_SERVER || (
     : 'https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run'
 );
 
-async function prewarmTTS(text: string) {
+async function scheduleTTS(trackKey: string, text: string) {
   try {
-    await fetch(`${API_BASE}/tts/prewarm`, {
+    await fetch(`${API_BASE}/tts/schedule`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
-      body: JSON.stringify(text),
+      body: JSON.stringify({ trackKey, hostText: text }),
     });
-    logger.add('info', `🔥 [TTS PREWARM] Queued pre-synthesis for: "${text.substring(0, 60)}..."`);
+    logger.add('info', `🔥 [TTS SCHEDULE] Scheduled host speech for: "${trackKey}"`);
   } catch (e) {
-    logger.add('warn', `[TTS PREWARM] Failed to prewarm: ${e}`);
+    logger.add('warn', `[TTS SCHEDULE] Failed: ${e}`);
   }
 }
 
@@ -268,8 +268,9 @@ function App() {
               };
               radioItemsRef.current = [...radioItemsRef.current, item1];
               setRadioItems([...radioItemsRef.current]);
-              // Pre-warm TTS cache NOW so it's ready before the song ends
-              prewarmTTS(radioText1.text);
+              // Schedule TTS with the track name so server injects speech before Song B
+              const trackKey1 = targetTrack1.name + " " + (targetTrack1.artists[0]?.name || "");
+              scheduleTTS(trackKey1, radioText1.text);
 
               setTimeout(() => {
                 radioItemsRef.current = radioItemsRef.current.map(item =>
@@ -301,8 +302,10 @@ function App() {
                 };
                 radioItemsRef.current = [...radioItemsRef.current, item2];
                 setRadioItems([...radioItemsRef.current]);
-                // Pre-warm TTS cache NOW so it's ready before the song ends
-                prewarmTTS(radioText2.text);
+                // Schedule TTS with the track name so server injects speech before that track
+                const targetTrack2 = queue[2];
+                const trackKey2 = targetTrack2.name + " " + (targetTrack2.artists[0]?.name || "");
+                scheduleTTS(trackKey2, radioText2.text);
 
                 setTimeout(() => {
                   radioItemsRef.current = radioItemsRef.current.map(item =>
