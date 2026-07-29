@@ -47,7 +47,7 @@ export const SongCard = memo((props : SongCardProps) => {
                 </Text>
             </Box>
             <Text color="#6f6f76" fontSize="0.8rem" fontWeight="600" pr="4px" display={{ base: 'none', sm: 'block' }}>
-                {song.album.release_date.split("-")[0]}
+                {song.album?.release_date ? song.album.release_date.split("-")[0] : ""}
             </Text>
         </Flex>
     )

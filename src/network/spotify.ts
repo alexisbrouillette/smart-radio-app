@@ -10,7 +10,7 @@ const simplifyQueue = (rawQueue: Track[]) => {
   rawQueue.forEach((item, i) => {
     queue.push({
       "name": item.name,
-      "release_year": item.album.release_date.split("-")[0],
+      "release_year": item.album?.release_date ? item.album.release_date.split("-")[0] : "",
       "album": item.album.name,
       "artists": item.artists.map(obj => obj.name).join(", "),
       "id": item.id
