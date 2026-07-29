@@ -20,7 +20,7 @@ export const logger = {
       type,
       message
     };
-    this.logs = [entry, ...this.logs].slice(0, 40); // keep last 40 logs
+    this.logs = [entry, ...this.logs].slice(0, 80); // keep last 80 logs
     this.listeners.forEach(cb => cb(this.logs));
   },
   
@@ -35,6 +35,39 @@ export const logger = {
     this.listeners.forEach(cb => cb(this.logs));
   }
 };
+
+// Global console & error interception for mobile FE debugging
+if (typeof window !== 'undefined') {
+  const origLog = console.log;
+  const origWarn = console.warn;
+  const origErr = console.error;
+
+  console.log = (...args: any[]) => {
+    origLog(...args);
+    const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+    logger.add('info', msg);
+  };
+
+  console.warn = (...args: any[]) => {
+    origWarn(...args);
+    const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+    logger.add('warn', msg);
+  };
+
+  console.error = (...args: any[]) => {
+    origErr(...args);
+    const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+    logger.add('error', msg);
+  };
+
+  window.addEventListener('error', (event) => {
+    logger.add('error', `[UNCAUGHT ERROR] ${event.message} at ${event.filename}:${event.lineno}`);
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    logger.add('error', `[UNHANDLED REJECTION] ${event.reason?.message || event.reason}`);
+  });
+}
 
 export const DebugConsole: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);

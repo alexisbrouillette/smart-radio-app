@@ -64,11 +64,11 @@ function WebPlayback(props) {
 
     useEffect(() => {
         transitioningRef.current = true;
+        logger.add('event', `[TRACK TRANSITION] Transitioning to track: "${current_track.name}"`);
         if (streamAudioRef.current) {
             try { 
-                streamAudioRef.current.currentTime = 0; 
                 if (isPlaying) {
-                    streamAudioRef.current.play().catch(e => console.log("Track transition auto-play:", e));
+                    streamAudioRef.current.play().catch(e => logger.add('warn', `Track transition play error: ${e.message}`));
                 }
             } catch (e) {}
         }
@@ -76,7 +76,7 @@ function WebPlayback(props) {
             transitioningRef.current = false;
         }, 5000);
         return () => clearTimeout(timer);
-    }, [current_track.id, isPlaying]);
+    }, [current_track.id, current_track.name, isPlaying]);
 
     const requestWakeLock = async () => {
         try {
@@ -260,8 +260,11 @@ function WebPlayback(props) {
                             autoPlay 
                             src={streamUrl} 
                             onCanPlay={() => {
+                                logger.add('info', `🎵 [AUDIO CAN PLAY] Stream ready for: "${current_track.name}"`);
                                 if (isPlaying && streamAudioRef.current && streamAudioRef.current.paused) {
-                                    streamAudioRef.current.play().catch(() => {});
+                                    streamAudioRef.current.play().catch(err => {
+                                        logger.add('warn', `⚠️ [AUDIO PLAY RETRY ERR] ${err.name}: ${err.message}`);
+                                    });
                                 }
                             }}
                             onTimeUpdate={(e) => {
@@ -272,32 +275,41 @@ function WebPlayback(props) {
 
                                 const targetLimit = (exactSegmentSec > 60) ? exactSegmentSec : fallbackLimit;
 
+                                // Log progress every ~15 seconds to mobile console
+                                const roundedTime = Math.floor(audio.currentTime);
+                                if (roundedTime > 0 && roundedTime % 15 === 0 && (audio.dataset.lastLoggedTime !== String(roundedTime))) {
+                                    audio.dataset.lastLoggedTime = String(roundedTime);
+                                    logger.add('info', `⏱️ [STREAM PROGRESS] ${audio.currentTime.toFixed(0)}s / ${targetLimit.toFixed(0)}s | Playing: "${current_track.name}"`);
+                                }
+
                                 if (audio.currentTime >= targetLimit && audio.currentTime > (targetLimit - 5) && !transitioningRef.current) {
                                     transitioningRef.current = true;
-                                    console.log(`⏱️ [EXACT STREAM UI SYNC] Segment limit reached (${audio.currentTime.toFixed(1)}s / ${targetLimit.toFixed(1)}s). Advancing UI to next track!`);
-                                    logger.add('event', `[EXACT STREAM UI SYNC] Segment finished (${targetLimit.toFixed(1)}s). Advancing frontend UI state...`);
+                                    logger.add('event', `⏱️ [EXACT STREAM UI SYNC] Segment limit reached (${audio.currentTime.toFixed(1)}s / ${targetLimit.toFixed(1)}s). Advancing UI...`);
                                     if (props.advanceToNextTrack) {
                                         props.advanceToNextTrack();
                                     }
                                     setTimeout(() => { transitioningRef.current = false; }, 3000);
                                 }
                             }}
-                            onPlay={() => console.log("🔊 [AUDIO DEVTOOLS LOG] Stream started playing:", streamUrl)}
-                            onPause={() => console.log("⏸️ [AUDIO DEVTOOLS LOG] Stream paused")}
+                            onPlay={() => logger.add('info', `🔊 [STREAM PLAYING] Started: "${current_track.name}"`)}
+                            onPause={() => logger.add('warn', `⏸️ [STREAM PAUSED] Paused at: ${streamAudioRef.current?.currentTime?.toFixed(1)}s`)}
                             onEnded={() => {
-                                console.log("🏁 [AUDIO DEVTOOLS LOG] Stream ENDED! Triggering advanceToNextTrack()...");
-                                logger.add('event', "[AUDIO DEVTOOLS LOG] Stream ended, advancing to next track...");
+                                logger.add('event', `🏁 [STREAM ENDED] Finished track: "${current_track.name}". Advancing UI...`);
                                 if (props.advanceToNextTrack) props.advanceToNextTrack();
                             }}
-                            onError={(e) => console.error("❌ [AUDIO DEVTOOLS ERROR] Stream audio element error:", e)}
-                            onStalled={() => console.warn("⚠️ [AUDIO DEVTOOLS WARNING] Stream stalled / waiting for data...")}
+                            onError={(e) => {
+                                const errObj = e.currentTarget.error;
+                                const errMsg = errObj ? `Code ${errObj.code}: ${errObj.message}` : 'Unknown HTMLMediaElement error';
+                                logger.add('error', `❌ [STREAM AUDIO ERROR] ${errMsg}`);
+                            }}
+                            onStalled={() => logger.add('warn', `⚠️ [STREAM STALED] Data stalled for: "${current_track.name}"`)}
                             onWaiting={() => {
-                                console.warn("⏳ [AUDIO DEVTOOLS WARNING] Stream buffer empty / waiting...");
+                                logger.add('warn', `⏳ [STREAM WAITING] Buffer empty, waiting for data...`);
                                 if (streamAudioRef.current && !streamAudioRef.current.paused) {
                                     setTimeout(() => {
                                         if (streamAudioRef.current && streamAudioRef.current.readyState < 3 && !streamAudioRef.current.paused) {
-                                            console.log("🔄 [STREAM RECOVERY] Resuming audio stream...");
-                                            streamAudioRef.current.play().catch(() => {});
+                                            logger.add('info', "🔄 [STREAM RECOVERY] Retrying play on stalled stream...");
+                                            streamAudioRef.current.play().catch(err => logger.add('error', `Recovery play failed: ${err.message}`));
                                         }
                                     }, 5000);
                                 }
