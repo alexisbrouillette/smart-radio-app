@@ -65,13 +65,18 @@ function WebPlayback(props) {
     useEffect(() => {
         transitioningRef.current = true;
         if (streamAudioRef.current) {
-            try { streamAudioRef.current.currentTime = 0; } catch (e) {}
+            try { 
+                streamAudioRef.current.currentTime = 0; 
+                if (isPlaying) {
+                    streamAudioRef.current.play().catch(e => console.log("Track transition auto-play:", e));
+                }
+            } catch (e) {}
         }
         const timer = setTimeout(() => {
             transitioningRef.current = false;
         }, 5000);
         return () => clearTimeout(timer);
-    }, [current_track.id]);
+    }, [current_track.id, isPlaying]);
 
     const requestWakeLock = async () => {
         try {
@@ -254,6 +259,11 @@ function WebPlayback(props) {
                             controls 
                             autoPlay 
                             src={streamUrl} 
+                            onCanPlay={() => {
+                                if (isPlaying && streamAudioRef.current && streamAudioRef.current.paused) {
+                                    streamAudioRef.current.play().catch(() => {});
+                                }
+                            }}
                             onTimeUpdate={(e) => {
                                 const audio = e.currentTarget;
                                 const songSec = (current_track.duration_ms || 180000) / 1000;
