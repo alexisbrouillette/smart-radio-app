@@ -177,7 +177,8 @@ export async function generate_queue_audio(text: string): Promise<string | null>
     const response = await fetch(`${serverAddress}/get_radio_audio`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true'
       },
       body: JSON.stringify(text)
     });

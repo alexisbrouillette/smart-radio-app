@@ -42,7 +42,9 @@ function WebPlayback(props) {
             
             try {
                 const url = `${API_BASE}/stream/duration?track=${encodeURIComponent(trackName)}${activeRadioItem ? `&hostText=${encodeURIComponent(activeRadioItem.text)}` : ''}`;
-                const res = await fetch(url);
+                const res = await fetch(url, {
+                    headers: { 'ngrok-skip-browser-warning': 'true' }
+                });
                 const data = await res.json();
                 if (isMounted && data.total_segment_sec > 60) {
                     console.log(`⏱️ [EXACT DURATION API] Received exact segment length: ${data.total_segment_sec.toFixed(2)}s`);
