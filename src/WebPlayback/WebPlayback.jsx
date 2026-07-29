@@ -177,12 +177,12 @@ function WebPlayback(props) {
         if (streamAudioRef.current) {
             if (isPlaying) {
                 streamAudioRef.current.pause();
-                await pausePlayback();
+                try { await pausePlayback(); } catch (e) {}
                 setIsPlaying(false);
                 logger.add('info', "Playback paused");
             } else {
                 streamAudioRef.current.play().catch(() => {});
-                await resumePlayback();
+                try { await resumePlayback(); } catch (e) {}
                 setIsPlaying(true);
                 logger.add('info', "Playback resumed");
             }
@@ -194,12 +194,12 @@ function WebPlayback(props) {
         if (props.advanceToNextTrack) {
             props.advanceToNextTrack();
         }
-        await skipToNext();
+        try { await skipToNext(); } catch (e) {}
     };
 
     const handlePrevious = async () => {
         logger.add('event', "User clicked Skip Previous Track");
-        await skipToPrevious();
+        try { await skipToPrevious(); } catch (e) {}
     };
 
     if (!is_active) { 

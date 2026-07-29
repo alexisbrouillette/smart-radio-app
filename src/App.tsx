@@ -231,63 +231,56 @@ function App() {
   // Generate AI Host announcement texts for visual UI cards
   useEffect(() => {
     const getRadioTexts = async (tracks: Track[]) => {
-      // 1. Check if Pair 1 target track is an EVEN song in station count!
+      // 1. Generate DJ speech text for upcoming track 1
       const targetTrack1 = tracks[1];
       if (targetTrack1) {
-        const targetIndexInQueue = queue.findIndex(t => t.id === targetTrack1.id);
-        const songNum1 = (songCounterRef.current) + 1 + (targetIndexInQueue > -1 ? targetIndexInQueue : 0);
-        if (songNum1 % 2 === 0) {
-          const radioText1 = await generate_queue_texts(tracks, pastTransitions.current);
-          if (radioText1 && radioText1.text && radioText1.beforeTrackId) {
-            const isDup1 = radioItemsRef.current.some(item => item.beforeTrackId === radioText1.beforeTrackId);
-            if (!isDup1) {
-              const item1: RadioItem = {
-                text: radioText1.text,
-                beforeTrackId: radioText1.beforeTrackId,
-                audio: null,
-                status: 'synthesizing'
-              };
-              radioItemsRef.current = [...radioItemsRef.current, item1];
-              setRadioItems([...radioItemsRef.current]);
+        const radioText1 = await generate_queue_texts(tracks, pastTransitions.current);
+        if (radioText1 && radioText1.text && radioText1.beforeTrackId) {
+          const isDup1 = radioItemsRef.current.some(item => item.beforeTrackId === radioText1.beforeTrackId);
+          if (!isDup1) {
+            const item1: RadioItem = {
+              text: radioText1.text,
+              beforeTrackId: radioText1.beforeTrackId,
+              audio: null,
+              status: 'synthesizing'
+            };
+            radioItemsRef.current = [...radioItemsRef.current, item1];
+            setRadioItems([...radioItemsRef.current]);
 
-              setTimeout(() => {
-                radioItemsRef.current = radioItemsRef.current.map(item =>
-                  item.beforeTrackId === radioText1.beforeTrackId ? { ...item, status: 'ready' } : item
-                );
-                setRadioItems([...radioItemsRef.current]);
-              }, 2500);
-            }
+            setTimeout(() => {
+              radioItemsRef.current = radioItemsRef.current.map(item =>
+                item.beforeTrackId === radioText1.beforeTrackId ? { ...item, status: 'ready' } : item
+              );
+              setRadioItems([...radioItemsRef.current]);
+            }, 2500);
           }
         }
       }
 
-      // 2. Check if Pair 2 target track (queue[2]) is an EVEN song in station count!
+      // 2. Generate DJ speech text for upcoming track 2
       if (queue.length >= 3) {
         const targetTrack2 = queue[2];
         if (targetTrack2) {
-          const songNum2 = (songCounterRef.current) + 1 + 2;
-          if (songNum2 % 2 === 0) {
-            const pair2 = [queue[1], queue[2]];
-            const radioText2 = await generate_queue_texts(pair2, pastTransitions.current);
-            if (radioText2 && radioText2.text && radioText2.beforeTrackId) {
-              const isDup2 = radioItemsRef.current.some(item => item.beforeTrackId === radioText2.beforeTrackId);
-              if (!isDup2) {
-                const item2: RadioItem = {
-                  text: radioText2.text,
-                  beforeTrackId: radioText2.beforeTrackId,
-                  audio: null,
-                  status: 'synthesizing'
-                };
-                radioItemsRef.current = [...radioItemsRef.current, item2];
-                setRadioItems([...radioItemsRef.current]);
+          const pair2 = [queue[1], queue[2]];
+          const radioText2 = await generate_queue_texts(pair2, pastTransitions.current);
+          if (radioText2 && radioText2.text && radioText2.beforeTrackId) {
+            const isDup2 = radioItemsRef.current.some(item => item.beforeTrackId === radioText2.beforeTrackId);
+            if (!isDup2) {
+              const item2: RadioItem = {
+                text: radioText2.text,
+                beforeTrackId: radioText2.beforeTrackId,
+                audio: null,
+                status: 'synthesizing'
+              };
+              radioItemsRef.current = [...radioItemsRef.current, item2];
+              setRadioItems([...radioItemsRef.current]);
 
-                setTimeout(() => {
-                  radioItemsRef.current = radioItemsRef.current.map(item =>
-                    item.beforeTrackId === radioText2.beforeTrackId ? { ...item, status: 'ready' } : item
-                  );
-                  setRadioItems([...radioItemsRef.current]);
-                }, 3500);
-              }
+              setTimeout(() => {
+                radioItemsRef.current = radioItemsRef.current.map(item =>
+                  item.beforeTrackId === radioText2.beforeTrackId ? { ...item, status: 'ready' } : item
+                );
+                setRadioItems([...radioItemsRef.current]);
+              }, 3500);
             }
           }
         }
