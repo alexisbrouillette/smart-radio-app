@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Button, IconButton, Flex, Text } from '@chakra-ui/react';
-import { pausePlayback, resumePlayback, skipToNext, skipToPrevious } from '../network/spotify';
 import "./style.css";
 
 import { logger } from '../components/DebugConsole';
@@ -204,7 +203,7 @@ function WebPlayback(props) {
         logger.add('event', "Connecting Remote AI Radio Host...");
         initializeAudioContext();
         if (props.sdkPlayerStarted) {
-            props.sdkPlayerStarted({ current: { pause: pausePlayback, resume: resumePlayback } });
+            props.sdkPlayerStarted({ current: { pause: () => {}, resume: () => {} } });
         }
     }
 
@@ -212,29 +211,25 @@ function WebPlayback(props) {
         if (streamAudioRef.current) {
             if (isPlaying) {
                 streamAudioRef.current.pause();
-                await pausePlayback();
                 setIsPlaying(false);
-                logger.add('info', "Playback paused");
+                logger.add('info', "Local stream playback paused");
             } else {
                 streamAudioRef.current.play().catch(() => {});
-                await resumePlayback();
                 setIsPlaying(true);
-                logger.add('info', "Playback resumed");
+                logger.add('info', "Local stream playback resumed");
             }
         }
     };
 
     const handleNext = async () => {
-        logger.add('event', "User clicked Skip Next Track");
+        logger.add('event', "User clicked Skip Next Track (Local Station)");
         if (props.advanceToNextTrack) {
             props.advanceToNextTrack();
         }
-        await skipToNext();
     };
 
     const handlePrevious = async () => {
-        logger.add('event', "User clicked Skip Previous Track");
-        await skipToPrevious();
+        logger.add('event', "User clicked Skip Previous Track (Local Station)");
     };
 
     if (!is_active) { 
