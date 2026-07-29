@@ -17,6 +17,25 @@ export interface RadioItem {
   status?: 'synthesizing' | 'ready';
 }
 
+const API_BASE = process.env.REACT_APP_API_SERVER || (
+  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'https://127.0.0.1:8000'
+    : 'https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run'
+);
+
+async function prewarmTTS(text: string) {
+  try {
+    await fetch(`${API_BASE}/tts/prewarm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+      body: JSON.stringify(text),
+    });
+    logger.add('info', `🔥 [TTS PREWARM] Queued pre-synthesis for: "${text.substring(0, 60)}..."`);
+  } catch (e) {
+    logger.add('warn', `[TTS PREWARM] Failed to prewarm: ${e}`);
+  }
+}
+
 function App() {
   const [queue, setQueue] = useState<Track []>([]);
   const trackChanged = useRef(false); // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -249,6 +268,8 @@ function App() {
               };
               radioItemsRef.current = [...radioItemsRef.current, item1];
               setRadioItems([...radioItemsRef.current]);
+              // Pre-warm TTS cache NOW so it's ready before the song ends
+              prewarmTTS(radioText1.text);
 
               setTimeout(() => {
                 radioItemsRef.current = radioItemsRef.current.map(item =>
@@ -280,6 +301,8 @@ function App() {
                 };
                 radioItemsRef.current = [...radioItemsRef.current, item2];
                 setRadioItems([...radioItemsRef.current]);
+                // Pre-warm TTS cache NOW so it's ready before the song ends
+                prewarmTTS(radioText2.text);
 
                 setTimeout(() => {
                   radioItemsRef.current = radioItemsRef.current.map(item =>

@@ -312,15 +312,21 @@ function WebPlayback(props) {
                                     logger.add('info', `⏱️ [STREAM PROGRESS] ${audio.currentTime.toFixed(0)}s / ${targetLimit.toFixed(0)}s | Playing: "${current_track.name}"`);
                                 }
 
-                                // Auto-advance UI when segment limit reached
+                                // Auto-advance UI + reload stream with next track's hostText when segment limit reached
                                 if (audio.currentTime >= targetLimit && !transitioningRef.current) {
                                     transitioningRef.current = true;
-                                    logger.add('event', `⏱️ [AUTO ADVANCE] Segment limit reached (${audio.currentTime.toFixed(1)}s / ${targetLimit.toFixed(1)}s). Advancing UI...`);
+                                    logger.add('event', `⏱️ [AUTO ADVANCE] Segment limit reached (${audio.currentTime.toFixed(1)}s / ${targetLimit.toFixed(1)}s). Loading next track with host speech...`);
+                                    
+                                    const nextTrack = props.queue && props.queue.length > 0 ? props.queue[0] : null;
+                                    const newQueue = props.queue && props.queue.length > 1 ? props.queue.slice(1) : [];
+                                    
                                     if (props.advanceToNextTrack) {
                                         props.advanceToNextTrack();
                                     }
-                                    // The stream itself keeps playing — no src change needed for auto-advance
-                                    // The server already streams Song A → Host Speech → Song B continuously
+                                    // Reload stream to next track — this picks up hostText from radioItems for that track
+                                    if (nextTrack) {
+                                        loadTrackIntoStream(nextTrack, newQueue, props.radioItems);
+                                    }
                                     setTimeout(() => { transitioningRef.current = false; }, 4000);
                                 }
                             }}
