@@ -23,14 +23,14 @@ const API_BASE = process.env.REACT_APP_API_SERVER || (
     : 'https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run'
 );
 
-async function scheduleTTS(trackKey: string, text: string) {
+async function scheduleTTS(trackKey: string, text: string, trackId?: string) {
   try {
     await fetch(`${API_BASE}/tts/schedule`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
-      body: JSON.stringify({ trackKey, hostText: text }),
+      body: JSON.stringify({ trackKey, hostText: text, trackId: trackId || '' }),
     });
-    logger.add('info', `🔥 [TTS SCHEDULE] Scheduled host speech for: "${trackKey}"`);
+    logger.add('info', `🔥 [TTS SCHEDULE] Scheduled host speech for: "${trackKey}" (ID: ${trackId})`);
   } catch (e) {
     logger.add('warn', `[TTS SCHEDULE] Failed: ${e}`);
   }
@@ -311,9 +311,9 @@ function App() {
               };
               radioItemsRef.current = [...radioItemsRef.current, item1];
               setRadioItems([...radioItemsRef.current]);
-              // Schedule TTS with the track name so server injects speech before Song B
+              // Schedule TTS with track name & track ID so server injects speech before Song B
               const trackKey1 = targetTrack1.name + " " + (targetTrack1.artists[0]?.name || "");
-              scheduleTTS(trackKey1, radioText1.text);
+              scheduleTTS(trackKey1, radioText1.text, targetTrack1.id);
 
               setTimeout(() => {
                 radioItemsRef.current = radioItemsRef.current.map(item =>
@@ -345,10 +345,10 @@ function App() {
                 };
                 radioItemsRef.current = [...radioItemsRef.current, item2];
                 setRadioItems([...radioItemsRef.current]);
-                // Schedule TTS with the track name so server injects speech before that track
-                const targetTrack2 = queue[2];
-                const trackKey2 = targetTrack2.name + " " + (targetTrack2.artists[0]?.name || "");
-                scheduleTTS(trackKey2, radioText2.text);
+                // Schedule TTS with track name & track ID so server injects speech before that track
+                const targetTrack2Item = queue[2];
+                const trackKey2 = targetTrack2Item.name + " " + (targetTrack2Item.artists[0]?.name || "");
+                scheduleTTS(trackKey2, radioText2.text, targetTrack2Item.id);
 
                 setTimeout(() => {
                   radioItemsRef.current = radioItemsRef.current.map(item =>
