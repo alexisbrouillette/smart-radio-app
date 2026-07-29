@@ -243,7 +243,7 @@ function WebPlayback(props) {
 
         const API_BASE = process.env.REACT_APP_API_SERVER || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'https://127.0.0.1:8000' : 'https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run');
 
-        const streamUrl = `${API_BASE}/stream/live.mp3?${trackParam}${nextTrackParam}${thirdTrackParam}${hostTextParam}`;
+        const streamUrl = `${API_BASE}/stream/live.mp3?ngrok-skip-browser-warning=true&${trackParam}${nextTrackParam}${thirdTrackParam}${hostTextParam}`;
 
         return (
             <div className="glass-panel player-container">
