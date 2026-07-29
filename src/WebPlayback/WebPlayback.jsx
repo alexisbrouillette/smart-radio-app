@@ -28,7 +28,9 @@ function buildStreamUrl(track, queue, radioItems) {
         allTracks.push(...queue);
     }
     const trackNames = allTracks.map(t => `${t.name} ${t.artists[0]?.name || ''}`);
+    const trackIds = allTracks.map(t => t.id || '');
     const tracksParam = `tracks=${encodeURIComponent(trackNames.join(','))}`;
+    const trackIdsParam = `&trackIds=${encodeURIComponent(trackIds.join(','))}`;
 
     const activeRadioItem = radioItems && radioItems.length > 0
         ? radioItems.find(item => item.beforeTrackId === track.id)
@@ -37,7 +39,7 @@ function buildStreamUrl(track, queue, radioItems) {
         ? `&hostText=${encodeURIComponent(activeRadioItem.text)}`
         : '';
 
-    return `${API_BASE}/stream/live.mp3?ngrok-skip-browser-warning=true&${tracksParam}${hostTextParam}`;
+    return `${API_BASE}/stream/live.mp3?ngrok-skip-browser-warning=true&${tracksParam}${trackIdsParam}${hostTextParam}`;
 }
 
 function WebPlayback(props) {
