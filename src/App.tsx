@@ -111,7 +111,7 @@ function App() {
   useEffect(() => {
     if (queue.length === 0) return;
     const fetchCacheStatus = async () => {
-      const trackQuery = queue.slice(0, 4).map(t => `${t.name} ${t.artists[0]?.name || ''}`).join(',');
+      const trackQuery = queue.slice(0, 4).map(t => `${t.name} ${t.artists[0]?.name || ''}`).join('|||');
       const API_BASE = process.env.REACT_APP_API_SERVER || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'https://127.0.0.1:8000' : 'https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run');
       try {
         const res = await fetch(`${API_BASE}/cache/status?tracks=${encodeURIComponent(trackQuery)}`, {
