@@ -92,11 +92,54 @@ function App() {
   // Root-level Radio Engine References
   const [currentTrack, setCurrentTrackState] = useState<Track | null>(null);
   const currentTrackRef = useRef<Track | null>(null);
+  const songCounterRef = useRef<number>(1);
 
   const setCurrentTrack = (track: Track | null) => {
     currentTrackRef.current = track;
     setCurrentTrackState(track);
   };
+
+  // Restore station session state from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedStr = localStorage.getItem('smart_radio_station_state');
+      if (savedStr) {
+        const saved = JSON.parse(savedStr);
+        if (saved.currentTrack && saved.currentTrack.name) {
+          currentTrackRef.current = saved.currentTrack;
+          setCurrentTrackState(saved.currentTrack);
+          if (saved.queue && Array.isArray(saved.queue) && saved.queue.length > 0) {
+            setQueue(saved.queue);
+          }
+          if (saved.radioItems && Array.isArray(saved.radioItems)) {
+            setRadioItems(saved.radioItems);
+            radioItemsRef.current = saved.radioItems;
+          }
+          if (saved.songCounter) {
+            songCounterRef.current = saved.songCounter;
+          }
+          logger.add('info', `💾 [STORAGE RESTORE] Restored station state: "${saved.currentTrack.name}" with ${saved.queue?.length || 0} queued tracks.`);
+        }
+      }
+    } catch (e) {
+      logger.add('warn', `Failed to restore station state: ${e}`);
+    }
+  }, []);
+
+  // Save station session state to localStorage on updates
+  useEffect(() => {
+    if (currentTrack) {
+      try {
+        const stateToSave = {
+          currentTrack,
+          queue,
+          radioItems,
+          songCounter: songCounterRef.current
+        };
+        localStorage.setItem('smart_radio_station_state', JSON.stringify(stateToSave));
+      } catch (e) {}
+    }
+  }, [currentTrack, queue, radioItems]);
 
   const [cachedTrackNames, setCachedTrackNames] = useState<string[]>([]);
 
@@ -418,11 +461,12 @@ function App() {
       index === self.findIndex((t) => t.id === track.id)
     );
     
-    // Set initial station state ONCE with Spotify currently_playing
+    // Set initial station state with Spotify currently_playing if not already restored
     if (!currentTrackRef.current) {
       setCurrentTrack(uniqueTracks[0]);
       setQueue(uniqueTracks.slice(1));
-    } else {
+    } else if (queue.length === 0 && uniqueTracks.length > 1) {
+      // Only overwrite queue if current queue is empty
       setQueue(uniqueTracks.slice(1));
     }
 
@@ -436,8 +480,6 @@ function App() {
     }
     return uniqueTracks;
   }
-
-  const songCounterRef = useRef<number>(1);
 
   const advanceToNextTrack = () => {
     if (queue.length > 0) {

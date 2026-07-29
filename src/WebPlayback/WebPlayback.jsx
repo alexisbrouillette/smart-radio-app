@@ -54,20 +54,21 @@ function WebPlayback(props) {
 
     const current_track = props.currentTrack || defaultTrack;
 
+    const hasAdvancedMidStreamRef = useRef(false);
+
     // ── Core imperative function: load a new track into the audio element ──
-    // Called ONLY on manual skip (user gesture) — never on auto-advance.
-    // iOS/Android allow src change + play() from a user gesture even in background.
+    // Called on initial start, manual skip, or stream end (onEnded).
     const loadTrackIntoStream = useCallback((track, queue, radioItems) => {
         if (!track || !track.name) return;
+        hasAdvancedMidStreamRef.current = false;
         const url = buildStreamUrl(track, queue, radioItems);
         sessionStreamUrlRef.current = url;
         setSessionStreamUrl(url);
-        logger.add('info', `⏭️ [MANUAL SKIP STREAM] Loading: "${track.name}"`);
+        logger.add('info', `📻 [STREAM SEGMENT LOAD] Loading stream for: "${track.name}"`);
 
         const audio = streamAudioRef.current;
         if (audio) {
             audio.src = url;
-            // Ignore AbortError — onCanPlay handler will retry play() when buffer is ready
             audio.play().catch(err => {
                 if (err.name !== 'AbortError') {
                     logger.add('warn', `▶️ [STREAM PLAY ERR] ${err.name}: ${err.message}`);
@@ -311,12 +312,12 @@ function WebPlayback(props) {
                                     logger.add('info', `⏱️ [STREAM PROGRESS] ${audio.currentTime.toFixed(0)}s / ${targetLimit.toFixed(0)}s | Playing: "${current_track.name}"`);
                                 }
 
-                                // Auto-advance UI only — DO NOT reload audio.src.
-                                // Server already streams Song A → [host speech] → Song B continuously.
-                                // Changing src in background kills iOS audio session.
-                                if (audio.currentTime >= targetLimit && !transitioningRef.current) {
+                                // Auto-advance UI mid-stream ONCE when Segment A finishes (Song A → Song B transition).
+                                // Stream continues seamlessly without src reload.
+                                if (audio.currentTime >= targetLimit && !hasAdvancedMidStreamRef.current && !transitioningRef.current) {
+                                    hasAdvancedMidStreamRef.current = true;
                                     transitioningRef.current = true;
-                                    logger.add('event', `⏱️ [AUTO ADVANCE] Segment limit (${audio.currentTime.toFixed(1)}s / ${targetLimit.toFixed(1)}s). Advancing UI only — stream continues.`);
+                                    logger.add('event', `⏱️ [MID-STREAM UI ADVANCE] Segment A limit (${audio.currentTime.toFixed(1)}s / ${targetLimit.toFixed(1)}s). Advancing UI to Song B.`);
                                     if (props.advanceToNextTrack) {
                                         props.advanceToNextTrack();
                                     }
@@ -326,8 +327,15 @@ function WebPlayback(props) {
                             onPlay={() => logger.add('info', `🔊 [STREAM PLAYING] Started: "${current_track.name}"`)}
                             onPause={() => logger.add('warn', `⏸️ [STREAM PAUSED] Paused at: ${streamAudioRef.current?.currentTime?.toFixed(1)}s`)}
                             onEnded={() => {
-                                logger.add('event', `🏁 [STREAM ENDED] Stream ended. Advancing UI...`);
-                                if (props.advanceToNextTrack) props.advanceToNextTrack();
+                                logger.add('event', `🏁 [STREAM ENDED] Stream segment finished. Loading next track stream...`);
+                                const nextTrack = props.queue && props.queue.length > 0 ? props.queue[0] : null;
+                                const newQueue = props.queue && props.queue.length > 1 ? props.queue.slice(1) : [];
+                                if (props.advanceToNextTrack) {
+                                    props.advanceToNextTrack();
+                                }
+                                if (nextTrack) {
+                                    loadTrackIntoStream(nextTrack, newQueue, props.radioItems);
+                                }
                             }}
                             onError={(e) => {
                                 const errObj = e.currentTarget.error;
