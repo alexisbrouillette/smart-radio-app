@@ -23,24 +23,21 @@ const API_BASE = process.env.REACT_APP_API_SERVER || (
 );
 
 function buildStreamUrl(track, queue, radioItems) {
-    const nextTrackItem = queue && queue.length > 0 ? queue[0] : null;
-    const thirdTrackItem = queue && queue.length > 1 ? queue[1] : null;
+    const allTracks = [track];
+    if (queue && Array.isArray(queue)) {
+        allTracks.push(...queue);
+    }
+    const trackNames = allTracks.map(t => `${t.name} ${t.artists[0]?.name || ''}`);
+    const tracksParam = `tracks=${encodeURIComponent(trackNames.join(','))}`;
+
     const activeRadioItem = radioItems && radioItems.length > 0
         ? radioItems.find(item => item.beforeTrackId === track.id)
         : null;
-
-    const trackParam = `track=${encodeURIComponent(track.name + " " + (track.artists[0]?.name || ""))}`;
-    const nextTrackParam = nextTrackItem
-        ? `&nextTrack=${encodeURIComponent(nextTrackItem.name + " " + (nextTrackItem.artists[0]?.name || ""))}`
-        : '';
-    const thirdTrackParam = thirdTrackItem
-        ? `&thirdTrack=${encodeURIComponent(thirdTrackItem.name + " " + (thirdTrackItem.artists[0]?.name || ""))}`
-        : '';
     const hostTextParam = activeRadioItem
         ? `&hostText=${encodeURIComponent(activeRadioItem.text)}`
         : '';
 
-    return `${API_BASE}/stream/live.mp3?ngrok-skip-browser-warning=true&${trackParam}${nextTrackParam}${thirdTrackParam}${hostTextParam}`;
+    return `${API_BASE}/stream/live.mp3?ngrok-skip-browser-warning=true&${tracksParam}${hostTextParam}`;
 }
 
 function WebPlayback(props) {
