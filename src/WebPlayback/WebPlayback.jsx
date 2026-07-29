@@ -100,18 +100,34 @@ function WebPlayback(props) {
 
 
 
-    // ── Update MediaSession lock screen metadata when track changes ──
-    useEffect(() => {
-        if ('mediaSession' in navigator && current_track.name) {
+    // ── Update MediaSession lock screen metadata ──
+    const updateMediaSession = useCallback((track) => {
+        if (!('mediaSession' in navigator) || !track || !track.name) return;
+        try {
+            const images = track.album?.images?.map(img => ({
+                src: img.url,
+                sizes: `${img.width || 512}x${img.height || 512}`,
+                type: 'image/jpeg'
+            })) || [];
+
             navigator.mediaSession.metadata = new window.MediaMetadata({
-                title: current_track.name,
-                artist: current_track.artists[0]?.name || "Smart Radio Host",
-                album: "Smart Radio Station",
-                artwork: current_track.album?.images?.map(img => ({ src: img.url, sizes: '512x512', type: 'image/jpeg' })) || []
+                title: track.name,
+                artist: track.artists?.[0]?.name || "Smart Radio Host",
+                album: track.album?.name || "Smart Radio Station",
+                artwork: images
             });
+            navigator.mediaSession.playbackState = 'playing';
+            logger.add('info', `📱 [LOCK SCREEN UPDATED] "${track.name}" - ${track.artists?.[0]?.name || 'Artist'}`);
+        } catch (e) {
+            console.error("MediaSession update error:", e);
         }
-        logger.add('event', `[TRACK UI] Now showing: "${current_track.name}"`);
-    }, [current_track.id, current_track.name]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, []);
+
+    useEffect(() => {
+        if (current_track.name) {
+            updateMediaSession(current_track);
+        }
+    }, [current_track, updateMediaSession]);
 
     // ── Wake Lock ──
     const requestWakeLock = async () => {
@@ -173,17 +189,15 @@ function WebPlayback(props) {
         }
 
         if ('mediaSession' in navigator) {
-            navigator.mediaSession.metadata = new window.MediaMetadata({
-                title: "Smart Radio Host",
-                artist: "AI Radio Host",
-                album: "Live Broadcast Station"
-            });
             try {
                 navigator.mediaSession.setActionHandler('play', () => handlePlayPauseToggle());
                 navigator.mediaSession.setActionHandler('pause', () => handlePlayPauseToggle());
                 navigator.mediaSession.setActionHandler('nexttrack', () => handleNext());
                 navigator.mediaSession.setActionHandler('previoustrack', () => handlePrevious());
             } catch (e) {}
+        }
+        if (current_track.name) {
+            updateMediaSession(current_track);
         }
         requestWakeLock();
     };
