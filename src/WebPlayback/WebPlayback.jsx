@@ -16,11 +16,7 @@ const defaultTrack = {
     ]
 }
 
-const API_BASE = process.env.REACT_APP_API_SERVER || (
-    window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-        ? 'https://127.0.0.1:8000'
-        : 'https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run'
-);
+const API_BASE = process.env.REACT_APP_API_SERVER || 'https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run';
 
 function buildStreamUrl(track, queue, radioItems) {
     const allTracks = [track];

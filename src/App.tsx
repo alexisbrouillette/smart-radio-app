@@ -17,11 +17,7 @@ export interface RadioItem {
   status?: 'synthesizing' | 'ready';
 }
 
-const API_BASE = process.env.REACT_APP_API_SERVER || (
-  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? 'https://127.0.0.1:8000'
-    : 'https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run'
-);
+const API_BASE = process.env.REACT_APP_API_SERVER || 'https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run';
 
 async function scheduleTTS(trackKey: string, text: string, trackId?: string) {
   try {
@@ -114,7 +110,7 @@ function App() {
       const targetTracks = queue.slice(0, 4);
       const trackQuery = targetTracks.map(t => `${t.name} ${t.artists[0]?.name || ''}`).join('|||');
       const trackIdQuery = targetTracks.map(t => t.id || '').join('|||');
-      const API_BASE = process.env.REACT_APP_API_SERVER || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'https://127.0.0.1:8000' : 'https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run');
+      const API_BASE = process.env.REACT_APP_API_SERVER || 'https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run';
       try {
         const res = await fetch(`${API_BASE}/cache/status?tracks=${encodeURIComponent(trackQuery)}&trackIds=${encodeURIComponent(trackIdQuery)}`, {
           headers: { 'ngrok-skip-browser-warning': 'true' }
