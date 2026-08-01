@@ -155,7 +155,7 @@ const readWAV = async (stream: ReadableStreamDefaultReader<Uint8Array>) => {
 }
 
 export async function generate_queue_texts(queue: Track[], history: any[] = []) {
-  const serverAddress = process.env.REACT_APP_SERVER_ADRESS || 'https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run';
+  const serverAddress = 'https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run';
   const prev = queue[0];
   const nxt = queue.length > 1 ? queue[1] : queue[0];
   const beforeTrackId = queue.length > 1 ? queue[1].id : queue[0].id;
@@ -214,7 +214,7 @@ export async function generate_queue_texts(queue: Track[], history: any[] = []) 
   };
 }
 export async function generate_queue_audio(text: string): Promise<string | null> {
-  const serverAddress = process.env.REACT_APP_SERVER_ADRESS || 'https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run';
+  const serverAddress = 'https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run';
   try {
     console.log("Calling Modal API for audio synthesis:", `${serverAddress}/get_radio_audio`);
     const response = await fetch(`${serverAddress}/get_radio_audio`, {
