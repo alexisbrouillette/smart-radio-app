@@ -89,9 +89,12 @@ function WebPlayback(props) {
         }
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // ── Initialize stream once when the first track arrives ──
+    const lastLoadedTrackRef = useRef('');
+
+    // ── Initialize or update stream whenever active currentTrack changes ──
     useEffect(() => {
-        if (props.currentTrack && !sessionStreamUrlRef.current) {
+        if (props.currentTrack && props.currentTrack.name && props.currentTrack.name !== lastLoadedTrackRef.current) {
+            lastLoadedTrackRef.current = props.currentTrack.name;
             loadTrackIntoStream(props.currentTrack, props.queue, props.radioItems);
         }
     }, [props.currentTrack, props.queue, props.radioItems, loadTrackIntoStream]);
