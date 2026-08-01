@@ -253,9 +253,10 @@ function App() {
 
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Generate AI Host announcement texts for visual UI cards
+  // Generate AI Host announcement texts for visual UI cards (runs after music stream initializes)
   useEffect(() => {
-    const getRadioTexts = async (tracks: Track[]) => {
+    const timer = setTimeout(() => {
+      const getRadioTexts = async (tracks: Track[]) => {
       // 1. Check if Pair 1 target track is an EVEN song in station count!
       const targetTrack1 = tracks[1];
       if (targetTrack1) {
@@ -328,6 +329,9 @@ function App() {
     if (fetchingRadioFor.length > 0) {
       getRadioTexts(fetchingRadioFor);
     }
+    }, 2500);
+
+    return () => clearTimeout(timer);
   }, [fetchingRadioFor, queue]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pauseSong = async (player: any) => {
