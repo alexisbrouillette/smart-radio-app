@@ -21,7 +21,7 @@ const API_BASE = 'https://alexisbrouillette--smart-radio-api-fastapi-app.modal.r
 function buildStreamUrl(track, queue, radioItems) {
     const allTracks = [track];
     if (queue && Array.isArray(queue)) {
-        allTracks.push(...queue);
+        allTracks.push(...queue.slice(0, 2));
     }
     const trackNames = allTracks.map(t => `${t.name} ${t.artists[0]?.name || ''}`);
     const trackIds = allTracks.map(t => t.id || '');
