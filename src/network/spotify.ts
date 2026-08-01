@@ -155,18 +155,61 @@ const readWAV = async (stream: ReadableStreamDefaultReader<Uint8Array>) => {
 }
 
 export async function generate_queue_texts(queue: Track[], history: any[] = []) {
+  const serverAddress = process.env.REACT_APP_SERVER_ADRESS || 'https://alexisbrouillette--smart-radio-api-fastapi-app.modal.run';
   const prev = queue[0];
   const nxt = queue.length > 1 ? queue[1] : queue[0];
   const beforeTrackId = queue.length > 1 ? queue[1].id : queue[0].id;
-  const defaultText = prev && nxt 
-    ? `That was ${prev.name} by ${prev.artists.map((a: any) => a.name).join(", ")}. Up next, ${nxt.name} by ${nxt.artists.map((a: any) => a.name).join(", ")}!`
-    : "Stay tuned for more great music!";
+  
+  const fallbackText = prev && nxt 
+    ? `C'était ${prev.name} par ${prev.artists.map((a: any) => a.name).join(", ")}. Place maintenant à ${nxt.name} par ${nxt.artists.map((a: any) => a.name).join(", ")} !`
+    : "Restez à l'écoute sur Smart Radio !";
 
-  console.log("Generated text for Kokoro TTS:", defaultText);
+  try {
+    const simplifyTracks = (rawQueue: Track[]) => {
+      return rawQueue.slice(0, 2).map((item) => ({
+        name: item.name,
+        release_year: item.album?.release_date ? item.album.release_date.split("-")[0] : "",
+        album: item.album?.name || "",
+        artists: item.artists ? item.artists.map((obj: any) => obj.name).join(", ") : "",
+        id: item.id
+      }));
+    };
+
+    const payload = {
+      tracks: simplifyTracks(queue),
+      history: history
+    };
+
+    console.log("Calling Modal API /get_radio_text for French text generation...", payload);
+    const response = await fetch(`${serverAddress}/get_radio_text`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data && data.text) {
+        console.log("Received French radio text from Modal:", data.text);
+        return {
+          beforeTrackId: data.beforeTrackId || beforeTrackId,
+          afterTrackId: data.afterTrackId || (prev ? prev.id : beforeTrackId),
+          text: data.text,
+          audio: data.audio
+        };
+      }
+    }
+  } catch (error) {
+    console.error("Error fetching radio text from Modal API:", error);
+  }
+
   return {
     beforeTrackId: beforeTrackId,
     afterTrackId: prev ? prev.id : beforeTrackId,
-    text: defaultText,
+    text: fallbackText,
     audio: null
   };
 }
